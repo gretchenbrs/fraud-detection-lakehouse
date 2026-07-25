@@ -18,8 +18,13 @@ def read_mcc_codes(spark: SparkSession, source_path: str) -> DataFrame:
     """Explode the MCC mapping JSON into a tabular Bronze dataframe."""
     from pyspark.sql import functions as F
 
-    raw_json = spark.sparkContext.wholeTextFiles(source_path).toDF(
-        ["_raw_source_file", "raw_json"]
+    raw_json = (
+        spark.read.format("binaryFile")
+        .load(source_path)
+        .select(
+            F.col("path").alias("_raw_source_file"),
+            F.decode(F.col("content"), "UTF-8").alias("raw_json"),
+        )
     )
     parsed = raw_json.select(
         F.col("_raw_source_file"),
