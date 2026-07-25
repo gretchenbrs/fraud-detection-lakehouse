@@ -70,7 +70,7 @@ print("Transactions overview")
 display(transactions_overview(transactions))
 
 print("Transactions missingness")
-display(spark.createDataFrame(raw_missingness(transactions)).orderBy(F.desc("null_or_blank_count")))
+#display(spark.createDataFrame(raw_missingness(transactions)).orderBy(F.desc("null_or_blank_count")))
 
 print("Transaction type distribution")
 display(top_frequency(transactions, "use_chip"))
