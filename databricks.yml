@@ -1,29 +1,40 @@
-bundle:
+project:
   name: fraud-risk-lakehouse
+  layer: bronze
+  owner: gretchen
 
-variables:
-  catalog_name:
-    description: Unity Catalog catalog for the fraud lakehouse
-    default: "<catalog>"
-  schema_name:
-    description: Unity Catalog schema for the fraud lakehouse
-    default: "<schema>"
-  volume_name:
-    description: Unity Catalog Volume that stores the uploaded raw files
-    default: "<volume>"
-  raw_data_subdirectory:
-    description: Folder inside the volume containing the five raw source files
-    default: "fraud_raw"
-  bronze_storage_mode:
-    description: Bronze write mode target, either unity_catalog or path
-    default: "unity_catalog"
-  bronze_base_path:
-    description: Base Delta path used only when bronze_storage_mode=path
-    default: "dbfs:/tmp/fraud-risk-lakehouse/bronze"
+databricks:
+  catalog_name: workspace
+  schema_name: fraud_detection
+  volume_name: fraud_detection_raw
+  raw_data_subdirectory: ""
+  raw_data_path: /Volumes/workspace/fraud_detection/fraud_detection_raw
+  create_catalog_if_missing: false
+  create_schema_if_missing: false
 
-targets:
-  dev:
-    default: true
-    mode: development
-    workspace:
-      host: ${env.DATABRICKS_HOST}
+bronze:
+  storage_mode: unity_catalog
+  write_format: delta
+  write_mode: errorifexists
+  table_names:
+    transactions: bronze_transactions
+    users: bronze_users
+    cards: bronze_cards
+    fraud_labels: bronze_fraud_labels
+    mcc_codes: bronze_mcc_codes
+  base_path: dbfs:/tmp/fraud-risk-lakehouse/bronze
+  table_path_overrides: {}
+
+raw_sources:
+  expected_files:
+    transactions: transactions_data.csv
+    users: users_data.csv
+    cards: cards_data.csv
+    fraud_labels: train_fraud_labels.json
+    mcc_codes: mcc_codes.json
+
+runtime:
+  notes:
+    - Raw files are stored in the Unity Catalog Volume at /Volumes/workspace/fraud_detection/fraud_detection_raw
+    - Unity Catalog managed Bronze tables are preferred for this workspace
+    - overwrite is disabled by default and should only be used intentionally

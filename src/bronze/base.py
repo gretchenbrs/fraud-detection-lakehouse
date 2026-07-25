@@ -37,7 +37,10 @@ def add_ingestion_metadata(
     """Append standard Bronze ingestion metadata columns."""
     from pyspark.sql import functions as F
 
-    source_expr = F.col(source_file_column) if source_file_column else F.input_file_name()
+    if source_file_column:
+        source_expr = F.col(source_file_column)
+    else:
+        source_expr = F.expr("_metadata.file_path")
     result = (
         dataframe.withColumn("_source_file", source_expr)
         .withColumn("_ingested_at", F.current_timestamp())
