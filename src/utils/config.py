@@ -1,0 +1,180 @@
+"""Configuration helpers for Databricks-ready Bronze execution."""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any
+
+from src.utils.schemas import dataset_names, expected_source_file_name
+
+VALID_STORAGE_MODES = {"unity_catalog", "path"}
+VALID_WRITE_MODES = {"append", "overwrite", "errorifexists", "ignore"}
+
+
+def load_project_config(config_path: str) -> dict[str, Any]:
+    """Load the YAML project configuration."""
+    try:
+        import yaml
+    except ImportError as exc:
+        raise ImportError("PyYAML is required to load config/project_config.yml.") from exc
+
+    with open(config_path, encoding="utf-8") as handle:
+        config = yaml.safe_load(handle)
+    validate_project_config(config)
+    return config
+
+
+def is_placeholder(value: str | None) -> bool:
+    """Return True when a config value still contains template placeholders."""
+    return not value or "<" in value or ">" in value
+
+
+def validate_identifier(name: str, label: str = "identifier", allow_placeholder: bool = False) -> None:
+    """Validate a catalog, schema, volume, or table identifier."""
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError(f"{label} must be a non-empty string.")
+    if not allow_placeholder and is_placeholder(name):
+        raise ValueError(f"{label} still contains placeholder text: {name}")
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+    if any(char not in allowed for char in name):
+        raise ValueError(
+            f"{label} contains unsupported characters: {name}. Use letters, numbers, and underscores only."
+        )
+
+
+def build_raw_data_path(
+    catalog_name: str,
+    schema_name: str,
+    volume_name: str,
+    raw_data_subdirectory: str = "fraud_raw",
+) -> str:
+    """Build the expected Unity Catalog Volume folder path for raw uploads."""
+    if not raw_data_subdirectory.strip():
+        raise ValueError("raw_data_subdirectory must not be blank.")
+    return (
+        f"/Volumes/{catalog_name}/{schema_name}/{volume_name}/{raw_data_subdirectory.strip('/')}"
+    )
+
+
+def validate_project_config(config: dict[str, Any]) -> None:
+    """Validate the minimum config contract needed by the Bronze layer."""
+    for section_name in ("project", "databricks", "bronze", "raw_sources"):
+        if section_name not in config:
+            raise ValueError(f"project_config.yml is missing the '{section_name}' section.")
+
+    expected_files = config["raw_sources"].get("expected_files", {})
+    table_names = config["bronze"].get("table_names", {})
+
+    for dataset_name in dataset_names():
+        if expected_files.get(dataset_name) != expected_source_file_name(dataset_name):
+            raise ValueError(
+                f"raw_sources.expected_files.{dataset_name} must be {expected_source_file_name(dataset_name)}"
+            )
+        table_name = table_names.get(dataset_name)
+        if not table_name:
+            raise ValueError(f"bronze.table_names.{dataset_name} is required.")
+        validate_identifier(table_name, label=f"bronze.table_names.{dataset_name}", allow_placeholder=False)
+
+    storage_mode = config["bronze"].get("storage_mode")
+    if storage_mode not in VALID_STORAGE_MODES:
+        raise ValueError(f"bronze.storage_mode must be one of {sorted(VALID_STORAGE_MODES)}")
+
+    write_mode = config["bronze"].get("write_mode")
+    if write_mode not in VALID_WRITE_MODES:
+        raise ValueError(f"bronze.write_mode must be one of {sorted(VALID_WRITE_MODES)}")
+
+    if storage_mode == "path" and not config["bronze"].get("base_path"):
+        raise ValueError("bronze.base_path is required when bronze.storage_mode=path")
+
+
+def apply_runtime_overrides(
+    config: dict[str, Any],
+    overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return a copy of the config with notebook runtime overrides applied."""
+    resolved = deepcopy(config)
+    overrides = overrides or {}
+
+    databricks_cfg = resolved["databricks"]
+    bronze_cfg = resolved["bronze"]
+
+    for key in (
+        "catalog_name",
+        "schema_name",
+        "volume_name",
+        "raw_data_subdirectory",
+        "raw_data_path",
+        "create_catalog_if_missing",
+        "create_schema_if_missing",
+    ):
+        if key in overrides and overrides[key] not in (None, ""):
+            databricks_cfg[key] = overrides[key]
+
+    for key in ("storage_mode", "write_format", "write_mode", "base_path"):
+        if key in overrides and overrides[key] not in (None, ""):
+            bronze_cfg[key] = overrides[key]
+
+    if not overrides.get("raw_data_path"):
+        if not any(
+            is_placeholder(databricks_cfg.get(name))
+            for name in ("catalog_name", "schema_name", "volume_name")
+        ):
+            databricks_cfg["raw_data_path"] = build_raw_data_path(
+                databricks_cfg["catalog_name"],
+                databricks_cfg["schema_name"],
+                databricks_cfg["volume_name"],
+                databricks_cfg["raw_data_subdirectory"],
+            )
+
+    validate_project_config(resolved)
+    return resolved
+
+
+def bronze_table_name(config: dict[str, Any], dataset_name: str) -> str:
+    """Return the fully-qualified Unity Catalog Bronze table name."""
+    catalog_name = config["databricks"]["catalog_name"]
+    schema_name = config["databricks"]["schema_name"]
+    table_name = config["bronze"]["table_names"][dataset_name]
+    validate_identifier(catalog_name, label="catalog_name", allow_placeholder=False)
+    validate_identifier(schema_name, label="schema_name", allow_placeholder=False)
+    return f"{catalog_name}.{schema_name}.{table_name}"
+
+
+def bronze_target_path(config: dict[str, Any], dataset_name: str) -> str:
+    """Return the configured Delta path for a Bronze dataset when path mode is used."""
+    overrides = config["bronze"].get("table_path_overrides", {})
+    if dataset_name in overrides and overrides[dataset_name]:
+        return overrides[dataset_name].rstrip("/")
+    base_path = config["bronze"]["base_path"].rstrip("/")
+    table_name = config["bronze"]["table_names"][dataset_name]
+    return f"{base_path}/{table_name}"
+
+
+def raw_source_path(config: dict[str, Any], dataset_name: str) -> str:
+    """Return the full raw file path for one dataset."""
+    raw_data_path = config["databricks"]["raw_data_path"].rstrip("/")
+    file_name = config["raw_sources"]["expected_files"][dataset_name]
+    return f"{raw_data_path}/{file_name}"
+
+
+def raw_source_paths(config: dict[str, Any]) -> dict[str, str]:
+    """Return full raw source paths for every supported dataset."""
+    return {dataset_name: raw_source_path(config, dataset_name) for dataset_name in dataset_names()}
+
+
+def bronze_dataset_runtime(config: dict[str, Any], dataset_name: str) -> dict[str, str]:
+    """Return the resolved source and target settings for one Bronze dataset."""
+    runtime = {
+        "dataset_name": dataset_name,
+        "source_path": raw_source_path(config, dataset_name),
+        "storage_mode": config["bronze"]["storage_mode"],
+        "write_format": config["bronze"]["write_format"],
+        "write_mode": config["bronze"]["write_mode"],
+    }
+    if runtime["storage_mode"] == "unity_catalog":
+        runtime["target_table"] = bronze_table_name(config, dataset_name)
+        runtime["target_path"] = ""
+    else:
+        runtime["target_table"] = ""
+        runtime["target_path"] = bronze_target_path(config, dataset_name)
+    return runtime

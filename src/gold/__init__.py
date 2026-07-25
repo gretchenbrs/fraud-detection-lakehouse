@@ -1,0 +1,1 @@
+"""Gold-layer package placeholder."""

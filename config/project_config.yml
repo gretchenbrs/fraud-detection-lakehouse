@@ -1,0 +1,41 @@
+project:
+  name: fraud-risk-lakehouse
+  layer: bronze
+  owner: gretchen
+
+databricks:
+  catalog_name: "<catalog>"
+  schema_name: "<schema>"
+  volume_name: "<volume>"
+  raw_data_subdirectory: fraud_raw
+  raw_data_path: "/Volumes/<catalog>/<schema>/<volume>/fraud_raw"
+  create_catalog_if_missing: false
+  create_schema_if_missing: false
+
+bronze:
+  storage_mode: unity_catalog
+  write_format: delta
+  write_mode: errorifexists
+  table_names:
+    transactions: bronze_transactions
+    users: bronze_users
+    cards: bronze_cards
+    fraud_labels: bronze_fraud_labels
+    mcc_codes: bronze_mcc_codes
+  base_path: dbfs:/tmp/fraud-risk-lakehouse/bronze
+  table_path_overrides: {}
+
+raw_sources:
+  expected_files:
+    transactions: transactions_data.csv
+    users: users_data.csv
+    cards: cards_data.csv
+    fraud_labels: train_fraud_labels.json
+    mcc_codes: mcc_codes.json
+
+runtime:
+  notes:
+    - Edit catalog, schema, volume, and raw_data_path before running in Databricks.
+    - Unity Catalog managed tables are preferred when the workspace supports them.
+    - Set bronze.storage_mode to path to write Delta files under bronze.base_path instead of managed tables.
+    - overwrite is disabled by default and should be used only intentionally.

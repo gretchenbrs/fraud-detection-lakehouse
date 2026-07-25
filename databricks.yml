@@ -1,0 +1,29 @@
+bundle:
+  name: fraud-risk-lakehouse
+
+variables:
+  catalog_name:
+    description: Unity Catalog catalog for the fraud lakehouse
+    default: "<catalog>"
+  schema_name:
+    description: Unity Catalog schema for the fraud lakehouse
+    default: "<schema>"
+  volume_name:
+    description: Unity Catalog Volume that stores the uploaded raw files
+    default: "<volume>"
+  raw_data_subdirectory:
+    description: Folder inside the volume containing the five raw source files
+    default: "fraud_raw"
+  bronze_storage_mode:
+    description: Bronze write mode target, either unity_catalog or path
+    default: "unity_catalog"
+  bronze_base_path:
+    description: Base Delta path used only when bronze_storage_mode=path
+    default: "dbfs:/tmp/fraud-risk-lakehouse/bronze"
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      host: ${env.DATABRICKS_HOST}
