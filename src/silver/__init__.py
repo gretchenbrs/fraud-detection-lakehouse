@@ -1,1 +1,1 @@
-"""Silver-layer package placeholder."""
+"""Typed, conformed, and enriched Silver-layer transformations."""

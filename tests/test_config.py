@@ -48,6 +48,22 @@ def _base_config() -> dict:
             "base_path": "dbfs:/tmp/fraud-risk-lakehouse/bronze",
             "table_path_overrides": {},
         },
+        "silver": {
+            "storage_mode": "unity_catalog",
+            "write_format": "delta",
+            "write_mode": "overwrite",
+            "table_names": {
+                "users": "silver_users",
+                "cards": "silver_cards",
+                "fraud_labels": "silver_fraud_labels",
+                "mcc_codes": "silver_mcc_codes",
+                "transactions": "silver_transactions",
+            },
+            "base_path": "dbfs:/tmp/fraud-risk-lakehouse/silver",
+            "table_path_overrides": {},
+            "night_start_hour": 0,
+            "night_end_hour": 6,
+        },
         "raw_sources": {
             "expected_files": {
                 "transactions": "transactions_data.csv",
@@ -102,6 +118,18 @@ class ConfigValidationTests(unittest.TestCase):
             updated["databricks"]["raw_data_path"],
             "/Volumes/prodcat/fraud/rawvol/fraud_raw",
         )
+
+    def test_build_raw_data_path_allows_volume_root(self) -> None:
+        self.assertEqual(
+            build_raw_data_path("cat", "sch", "vol", ""),
+            "/Volumes/cat/sch/vol",
+        )
+
+    def test_silver_config_requires_all_output_tables(self) -> None:
+        config = _base_config()
+        del config["silver"]["table_names"]["transactions"]
+        with self.assertRaises(ValueError):
+            validate_project_config(config)
 
 
 if __name__ == "__main__":

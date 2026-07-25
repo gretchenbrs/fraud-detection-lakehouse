@@ -1,4 +1,4 @@
-"""Configuration helpers for Databricks-ready Bronze execution."""
+"""Configuration helpers for Databricks-ready Lakehouse execution."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from src.utils.schemas import dataset_names, expected_source_file_name
 
 VALID_STORAGE_MODES = {"unity_catalog", "path"}
 VALID_WRITE_MODES = {"append", "overwrite", "errorifexists", "ignore"}
+SILVER_DATASET_NAMES = ("users", "cards", "fraud_labels", "mcc_codes", "transactions")
 
 
 def load_project_config(config_path: str) -> dict[str, Any]:
@@ -49,16 +50,14 @@ def build_raw_data_path(
     raw_data_subdirectory: str = "fraud_raw",
 ) -> str:
     """Build the expected Unity Catalog Volume folder path for raw uploads."""
-    if not raw_data_subdirectory.strip():
-        raise ValueError("raw_data_subdirectory must not be blank.")
-    return (
-        f"/Volumes/{catalog_name}/{schema_name}/{volume_name}/{raw_data_subdirectory.strip('/')}"
-    )
+    base_path = f"/Volumes/{catalog_name}/{schema_name}/{volume_name}"
+    subdirectory = raw_data_subdirectory.strip("/")
+    return f"{base_path}/{subdirectory}" if subdirectory else base_path
 
 
 def validate_project_config(config: dict[str, Any]) -> None:
-    """Validate the minimum config contract needed by the Bronze layer."""
-    for section_name in ("project", "databricks", "bronze", "raw_sources"):
+    """Validate the minimum config contract needed by Bronze and Silver."""
+    for section_name in ("project", "databricks", "bronze", "silver", "raw_sources"):
         if section_name not in config:
             raise ValueError(f"project_config.yml is missing the '{section_name}' section.")
 
@@ -86,6 +85,34 @@ def validate_project_config(config: dict[str, Any]) -> None:
     if storage_mode == "path" and not config["bronze"].get("base_path"):
         raise ValueError("bronze.base_path is required when bronze.storage_mode=path")
 
+    silver_cfg = config["silver"]
+    silver_storage_mode = silver_cfg.get("storage_mode")
+    if silver_storage_mode not in VALID_STORAGE_MODES:
+        raise ValueError(f"silver.storage_mode must be one of {sorted(VALID_STORAGE_MODES)}")
+    silver_write_mode = silver_cfg.get("write_mode")
+    if silver_write_mode not in VALID_WRITE_MODES:
+        raise ValueError(f"silver.write_mode must be one of {sorted(VALID_WRITE_MODES)}")
+    if silver_storage_mode == "path" and not silver_cfg.get("base_path"):
+        raise ValueError("silver.base_path is required when silver.storage_mode=path")
+    for dataset_name in SILVER_DATASET_NAMES:
+        table_name = silver_cfg.get("table_names", {}).get(dataset_name)
+        if not table_name:
+            raise ValueError(f"silver.table_names.{dataset_name} is required.")
+        validate_identifier(
+            table_name,
+            label=f"silver.table_names.{dataset_name}",
+            allow_placeholder=False,
+        )
+
+    night_start = silver_cfg.get("night_start_hour")
+    night_end = silver_cfg.get("night_end_hour")
+    if not isinstance(night_start, int) or not 0 <= night_start <= 23:
+        raise ValueError("silver.night_start_hour must be an integer from 0 through 23.")
+    if not isinstance(night_end, int) or not 1 <= night_end <= 24:
+        raise ValueError("silver.night_end_hour must be an integer from 1 through 24.")
+    if night_start >= night_end:
+        raise ValueError("Silver night hours must be a non-wrapping interval.")
+
 
 def apply_runtime_overrides(
     config: dict[str, Any],
@@ -97,6 +124,7 @@ def apply_runtime_overrides(
 
     databricks_cfg = resolved["databricks"]
     bronze_cfg = resolved["bronze"]
+    silver_cfg = resolved["silver"]
 
     for key in (
         "catalog_name",
@@ -113,6 +141,15 @@ def apply_runtime_overrides(
     for key in ("storage_mode", "write_format", "write_mode", "base_path"):
         if key in overrides and overrides[key] not in (None, ""):
             bronze_cfg[key] = overrides[key]
+
+    for key in (
+        "silver_storage_mode",
+        "silver_write_format",
+        "silver_write_mode",
+        "silver_base_path",
+    ):
+        if key in overrides and overrides[key] not in (None, ""):
+            silver_cfg[key.removeprefix("silver_")] = overrides[key]
 
     if not overrides.get("raw_data_path"):
         if not any(
@@ -177,4 +214,46 @@ def bronze_dataset_runtime(config: dict[str, Any], dataset_name: str) -> dict[st
     else:
         runtime["target_table"] = ""
         runtime["target_path"] = bronze_target_path(config, dataset_name)
+    return runtime
+
+
+def silver_table_name(config: dict[str, Any], dataset_name: str) -> str:
+    """Return the fully-qualified Unity Catalog Silver table name."""
+    if dataset_name not in SILVER_DATASET_NAMES:
+        raise ValueError(f"Unsupported Silver dataset: {dataset_name}")
+    catalog_name = config["databricks"]["catalog_name"]
+    schema_name = config["databricks"]["schema_name"]
+    table_name = config["silver"]["table_names"][dataset_name]
+    validate_identifier(catalog_name, label="catalog_name", allow_placeholder=False)
+    validate_identifier(schema_name, label="schema_name", allow_placeholder=False)
+    return f"{catalog_name}.{schema_name}.{table_name}"
+
+
+def silver_target_path(config: dict[str, Any], dataset_name: str) -> str:
+    """Return the configured Delta path for a Silver dataset."""
+    if dataset_name not in SILVER_DATASET_NAMES:
+        raise ValueError(f"Unsupported Silver dataset: {dataset_name}")
+    overrides = config["silver"].get("table_path_overrides", {})
+    if dataset_name in overrides and overrides[dataset_name]:
+        return overrides[dataset_name].rstrip("/")
+    base_path = config["silver"]["base_path"].rstrip("/")
+    table_name = config["silver"]["table_names"][dataset_name]
+    return f"{base_path}/{table_name}"
+
+
+def silver_dataset_runtime(config: dict[str, Any], dataset_name: str) -> dict[str, str]:
+    """Return the resolved target settings for one Silver dataset."""
+    silver_cfg = config["silver"]
+    runtime = {
+        "dataset_name": dataset_name,
+        "storage_mode": silver_cfg["storage_mode"],
+        "write_format": silver_cfg["write_format"],
+        "write_mode": silver_cfg["write_mode"],
+    }
+    if runtime["storage_mode"] == "unity_catalog":
+        runtime["target_table"] = silver_table_name(config, dataset_name)
+        runtime["target_path"] = ""
+    else:
+        runtime["target_table"] = ""
+        runtime["target_path"] = silver_target_path(config, dataset_name)
     return runtime

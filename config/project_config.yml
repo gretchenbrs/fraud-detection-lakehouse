@@ -1,21 +1,21 @@
 project:
   name: fraud-risk-lakehouse
-  layer: bronze
+  layer: silver
   owner: gretchen
 
 databricks:
-  catalog_name: "<catalog>"
-  schema_name: "<schema>"
-  volume_name: "<volume>"
-  raw_data_subdirectory: fraud_raw
-  raw_data_path: "/Volumes/<catalog>/<schema>/<volume>/fraud_raw"
+  catalog_name: workspace
+  schema_name: fraud_detection
+  volume_name: fraud_detection_raw
+  raw_data_subdirectory: ""
+  raw_data_path: "/Volumes/workspace/fraud_detection/fraud_detection_raw"
   create_catalog_if_missing: false
   create_schema_if_missing: false
 
 bronze:
   storage_mode: unity_catalog
   write_format: delta
-  write_mode: errorifexists
+  write_mode: overwrite
   table_names:
     transactions: bronze_transactions
     users: bronze_users
@@ -24,6 +24,21 @@ bronze:
     mcc_codes: bronze_mcc_codes
   base_path: dbfs:/tmp/fraud-risk-lakehouse/bronze
   table_path_overrides: {}
+
+silver:
+  storage_mode: unity_catalog
+  write_format: delta
+  write_mode: overwrite
+  table_names:
+    users: silver_users
+    cards: silver_cards
+    fraud_labels: silver_fraud_labels
+    mcc_codes: silver_mcc_codes
+    transactions: silver_transactions
+  base_path: dbfs:/tmp/fraud-risk-lakehouse/silver
+  table_path_overrides: {}
+  night_start_hour: 0
+  night_end_hour: 6
 
 raw_sources:
   expected_files:
@@ -35,7 +50,7 @@ raw_sources:
 
 runtime:
   notes:
-    - Edit catalog, schema, volume, and raw_data_path before running in Databricks.
+    - Default catalog, schema, volume, and raw_data_path match the current project workspace.
     - Unity Catalog managed tables are preferred when the workspace supports them.
     - Set bronze.storage_mode to path to write Delta files under bronze.base_path instead of managed tables.
-    - overwrite is disabled by default and should be used only intentionally.
+    - Bronze and Silver use overwrite for reproducible portfolio runs; production pipelines should use incremental writes.

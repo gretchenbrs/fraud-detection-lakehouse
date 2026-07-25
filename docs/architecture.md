@@ -4,14 +4,16 @@
 
 The project target is a Databricks Lakehouse that can ingest raw card-transaction data, standardize fraud-relevant signals, train and compare fraud models, and publish investigation-focused business outputs.
 
-The current implementation stops intentionally after:
+The current implementation includes:
 
 - Databricks environment setup
 - Bronze ingestion
 - Bronze validation
 - raw-data profiling
+- Silver cleaning and conformed dimensions
+- a Silver enriched transaction fact
 
-Silver, Gold, and modeling work should not begin until the Bronze outputs and profiling evidence are reviewed.
+Gold and modeling remain intentionally out of scope for this phase.
 
 ## Source System Boundary
 
@@ -69,16 +71,19 @@ Current Bronze metadata fields:
 
 ### Silver
 
-Planned responsibilities only, not yet implemented:
+Implemented responsibilities:
 
 - join fraud labels to transactions by transaction ID
-- verify and enforce `transactions.client_id -> users.id`
-- verify and enforce `transactions.card_id -> cards.id`
+- join users by `transactions.client_id -> users.id`
+- join cards by `transactions.card_id -> cards.id`
 - map MCC to merchant category
 - clean amounts and expose negative-amount flags
 - parse transaction timestamps and temporal fraud features
 - normalize error strings into interpretable flags
 - group merchant geography into domestic, international, or unknown
+- preserve all transaction rows with left joins and expose match-quality flags
+- preserve missing fraud labels as null
+- exclude raw card number, CVV, and street address from Silver
 
 ### Gold
 
@@ -99,11 +104,12 @@ The following relationships are supported by raw-schema inspection and reference
 - `cards.client_id -> users.id`
 - `transactions.mcc -> mcc_codes.mcc`
 
-Current verification status:
+Verification status:
 
 - raw field names were confirmed directly
 - a 200,000-row transaction sample matched the expected user and card keys
-- notebook-based full Bronze validation is still required before Silver work starts
+- full Bronze ingestion completed successfully in Databricks
+- Silver exposes unmatched-key counts for integration validation
 
 ## JSON Ingestion Strategy
 
@@ -127,11 +133,18 @@ The Bronze layer reads these files as whole-text JSON payloads and explodes them
 2. `bronze_ingestion.py`
 3. `01_bronze_validation.py`
 4. `02_raw_data_profiling.py`
+5. `03_silver_pipeline.py`
+
+## Silver Guardrails
+
+- no sampling or class balancing
+- no time split yet
+- no target-conditioned aggregations
+- no MCC fraud-rate encoding
+- no conversion of missing labels to zero
 
 ## Open Questions
 
-- whether all transaction rows are domestic US transactions when `merchant_state` is populated
-- whether blank `merchant_state` rows are exclusively online/international or simply incomplete
 - whether `merchant_id` is stable across time and unique across merchant geographies
 - whether `num_cards_issued` is per card product, per account, or historical issuance count
 - whether the fraud labels cover every eligible training-period transaction or only a curated subset

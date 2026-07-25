@@ -116,3 +116,50 @@ The full transaction-file scan observed these normalized tokens:
 - `Technical Glitch`
 
 Silver normalization should treat the raw field as a multi-valued categorical string rather than a single-label column.
+
+## Silver Outputs
+
+### silver_transactions
+
+This is the analysis-ready transaction fact. It retains all Bronze transactions and uses
+left joins, so enrichment failures do not remove rows.
+
+Key derived fields:
+
+| Field | Type | Definition |
+| --- | --- | --- |
+| `transaction_timestamp` | timestamp | Parsed from raw `date` |
+| `transaction_date` | date | Calendar date of the transaction |
+| `transaction_hour` | integer | Hour from 0 through 23 |
+| `transaction_weekday` | string | Full weekday name |
+| `is_weekend` | boolean | Saturday or Sunday |
+| `is_night` | boolean | Hour in configured interval `[0, 6)` |
+| `amount` | decimal(18,2) | Currency symbols, commas, spaces, and parentheses normalized |
+| `amount_abs` | decimal(18,2) | Absolute transaction amount |
+| `is_negative_amount` | boolean | Parsed amount is below zero |
+| `amount_parse_failed` | boolean | Non-blank raw amount failed numeric parsing |
+| `error_tokens` | array<string> | Trimmed comma-delimited error values |
+| `error_bad_cvv` | boolean | Contains `Bad CVV` |
+| `error_bad_pin` | boolean | Contains `Bad PIN` |
+| `error_insufficient_balance` | boolean | Contains `Insufficient Balance` |
+| `error_technical_glitch` | boolean | Contains `Technical Glitch` |
+| `merchant_location_category` | string | `domestic`, `international`, or `unknown` |
+| `mcc_category` | string | Category joined from `mcc_codes.json` |
+| `is_fraud` | integer | 1/0 for labeled rows; null for unlabeled rows |
+| `card_record_matched` | boolean | Card enrichment key matched |
+| `user_record_matched` | boolean | User enrichment key matched |
+| `mcc_record_matched` | boolean | MCC enrichment key matched |
+| `fraud_label_matched` | boolean | Fraud label exists for this transaction |
+| `card_user_matches_transaction_user` | boolean | Card owner agrees with transaction user |
+
+Location classification is supported by a full raw-domain scan: observed two-letter US
+state or military codes are domestic, observed country names are international, and blanks
+are unknown. Blank state values are not assumed to be international.
+
+### silver_users, silver_cards, silver_fraud_labels, silver_mcc_codes
+
+These tables provide typed conformed dimensions. Currency fields are decimal, numeric
+fields use numeric Spark types, and Yes/No fields become booleans or binary labels.
+Raw card number, CVV, and user street address remain available only in Bronze.
+
+No Silver table contains class-balanced data or training-only fraud-rate encodings.

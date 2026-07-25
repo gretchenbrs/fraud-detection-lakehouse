@@ -4,18 +4,19 @@ This repository rebuilds an existing credit-card fraud analysis project as a cle
 
 ## Current Phase
 
-The project is intentionally paused at the Bronze and raw-profiling stage.
+Bronze ingestion is complete and the first Silver pipeline is implemented.
 
 This phase includes:
 
-- Databricks environment setup guidance
-- configurable raw-data path and Bronze namespaces
-- executable Bronze ingestion for all five raw datasets
-- Bronze validation notebooks
-- raw-data profiling notebooks
-- a placeholder human-readable raw-data profile report
+- Databricks environment setup and five-source Bronze ingestion
+- Bronze schema, key, and relationship validation
+- Spark-native amount, timestamp, error, and location cleaning
+- typed user, card, fraud-label, and MCC Silver dimensions
+- a left-joined Silver transaction fact with explicit match-quality flags
+- managed Delta outputs in Unity Catalog
 
-This phase does **not** implement Silver transformations, Gold tables, or fraud modeling yet.
+This phase does **not** implement Gold tables, modeling, class balancing, target encoding,
+dashboards, workflows, or deployment.
 
 ## Verified Raw Inputs
 
@@ -36,13 +37,13 @@ The following generated files are explicitly excluded from the new pipeline:
 
 ## Databricks Storage Strategy
 
-The repository is configured to prefer Unity Catalog managed Bronze tables, with raw source files uploaded to a Unity Catalog Volume path like:
+The current project defaults to this Unity Catalog Volume:
 
 ```text
-/Volumes/<catalog>/<schema>/<volume>/fraud_raw/
+/Volumes/workspace/fraud_detection/fraud_detection_raw
 ```
 
-If your workspace does not support that pattern, the Bronze layer can also write path-based Delta outputs under a configurable base path.
+Bronze and Silver can also write path-based Delta outputs through configuration.
 
 All namespace settings live in [config/project_config.yml](config/project_config.yml).
 
@@ -56,12 +57,24 @@ The intended Bronze table names are:
 - `bronze_fraud_labels`
 - `bronze_mcc_codes`
 
+## Silver Tables
+
+- `silver_users`
+- `silver_cards`
+- `silver_fraud_labels`
+- `silver_mcc_codes`
+- `silver_transactions`
+
+`silver_transactions` preserves every Bronze transaction through left joins. Missing labels
+remain null, so Silver does not silently turn unlabeled rows into non-fraud examples.
+
 ## Notebook Run Order
 
 1. [notebooks/00_environment_setup.py](notebooks/00_environment_setup.py)
 2. [notebooks/bronze_ingestion.py](notebooks/bronze_ingestion.py)
 3. [notebooks/01_bronze_validation.py](notebooks/01_bronze_validation.py)
 4. [notebooks/02_raw_data_profiling.py](notebooks/02_raw_data_profiling.py)
+5. [notebooks/03_silver_pipeline.py](notebooks/03_silver_pipeline.py)
 
 ## Repository Layout
 
@@ -83,14 +96,15 @@ fraud-risk-lakehouse/
 └── tests/
 ```
 
-## What The Bronze Layer Does
+## Layer Responsibilities
 
-- reads each raw source separately with explicit schemas or verified JSON parsing
-- preserves raw source columns rather than applying Silver logic
-- adds `_ingested_at`, `_source_file`, and `_ingestion_date`
-- validates required CSV columns before writing
-- writes Delta outputs either to Unity Catalog managed tables or configurable Delta paths
-- defaults to `errorifexists` rather than destructive overwrite
+- Bronze preserves raw values, validates source structure, adds ingestion metadata, and
+  writes replayable Delta tables.
+- Silver standardizes types, creates label-independent risk signals, and enriches
+  transactions using the verified transaction, user, card, and MCC keys.
+- Raw card numbers, CVVs, and user street addresses stay in Bronze and are excluded from
+  Silver outputs.
+- MCC fraud-rate encoding is intentionally deferred to training-only feature logic.
 
 ## Supporting Documents
 
@@ -106,4 +120,5 @@ Run the lightweight non-Spark tests from the repository root:
 python3 -m unittest discover -s tests
 ```
 
-These tests validate configuration structure, table-name construction, schema registry consistency, and required-column checks. They do not prove that Spark ingestion succeeds inside Databricks.
+These tests validate configuration, source schemas, output names, and Silver rule contracts.
+The Databricks notebook run is the integration test for Spark and Unity Catalog behavior.
