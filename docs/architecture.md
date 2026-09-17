@@ -14,8 +14,10 @@ The current implementation includes:
 - a Silver enriched transaction fact
 - chronological feature splits
 - training-only MCC fraud-rate encoding
+- Spark ML baseline and tree-model comparison
+- threshold and top-k evaluation outputs
 
-Gold and modeling remain intentionally out of scope for this phase.
+Gold KPI and investigation-prioritization marts remain intentionally out of scope for this phase.
 
 ## Source System Boundary
 
@@ -107,6 +109,22 @@ Implemented responsibilities:
 - use the global training fraud rate for MCC values unseen during training
 - retain identifiers for traceability without treating them as model features
 
+### Models
+
+Implemented responsibilities:
+
+- fit categorical vocabularies, imputation statistics, and scaling on training rows only
+- calculate inverse-frequency class weights from training labels only
+- train a logistic-regression baseline and random-forest comparison model
+- preserve natural validation and test prevalence
+- calculate PR-AUC and ROC-AUC on validation and test
+- compare a configured threshold grid on validation
+- select one threshold per model by validation F1 with deterministic tie breaking
+- report test precision, recall, F1, and confusion counts only at the selected threshold
+- report exact top-k fraud-count and fraudulent-amount capture
+- materialize compact scores before repeated evaluation instead of using unsupported
+  Serverless DataFrame cache APIs
+
 ## Dataset Relationship Assumptions And Status
 
 The following relationships are supported by raw-schema inspection and reference-notebook evidence:
@@ -148,12 +166,17 @@ The Bronze layer reads these files as whole-text JSON payloads and explodes them
 4. `02_raw_data_profiling.py`
 5. `03_silver_pipeline.py`
 6. `04_feature_engineering.py`
+7. `05_model_training.py`
 
 ## Data Leakage Guardrails
 
 - no sampling or class balancing
 - no target-conditioned aggregation outside the training split
 - no conversion of missing labels to zero
+- preprocessing and class weights are fitted on train only
+- threshold selection uses validation only
+- test labels do not influence model fitting or threshold selection
+- F1 selection is not described as cost optimization
 
 ## Open Questions
 

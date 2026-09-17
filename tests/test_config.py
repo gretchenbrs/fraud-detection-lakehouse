@@ -17,6 +17,8 @@ from src.utils.config import (
     bronze_table_name,
     bronze_target_path,
     build_raw_data_path,
+    model_dataset_runtime,
+    model_table_name,
     validate_identifier,
     validate_project_config,
 )
@@ -78,6 +80,34 @@ def _base_config() -> dict:
             "train_end_date": "2017-12-31",
             "validation_end_date": "2018-12-31",
             "mcc_smoothing_alpha": 100.0,
+        },
+        "models": {
+            "storage_mode": "unity_catalog",
+            "write_format": "delta",
+            "write_mode": "overwrite",
+            "table_names": {
+                "scored_predictions": "model_scored_predictions",
+                "overall_metrics": "model_overall_metrics",
+                "threshold_metrics": "model_threshold_metrics",
+                "top_k_metrics": "model_top_k_metrics",
+            },
+            "base_path": "dbfs:/tmp/fraud-risk-lakehouse/models",
+            "table_path_overrides": {},
+            "seed": 42,
+            "use_class_weights": True,
+            "thresholds": [0.1, 0.5, 0.9],
+            "top_k_fractions": [0.01, 0.05],
+            "logistic_regression": {
+                "max_iter": 40,
+                "reg_param": 0.05,
+                "elastic_net_param": 0.0,
+            },
+            "random_forest": {
+                "num_trees": 40,
+                "max_depth": 8,
+                "max_bins": 128,
+                "subsampling_rate": 0.7,
+            },
         },
         "raw_sources": {
             "expected_files": {
@@ -150,6 +180,32 @@ class ConfigValidationTests(unittest.TestCase):
         config = _base_config()
         config["features"]["train_end_date"] = "2019-01-01"
         config["features"]["validation_end_date"] = "2018-12-31"
+        with self.assertRaises(ValueError):
+            validate_project_config(config)
+
+    def test_model_thresholds_must_be_sorted_and_unique(self) -> None:
+        config = _base_config()
+        config["models"]["thresholds"] = [0.5, 0.1, 0.5]
+        with self.assertRaises(ValueError):
+            validate_project_config(config)
+
+    def test_model_table_name_is_fully_qualified(self) -> None:
+        self.assertEqual(
+            model_table_name(_base_config(), "overall_metrics"),
+            "demo_catalog.demo_schema.model_overall_metrics",
+        )
+
+    def test_model_runtime_uses_managed_table(self) -> None:
+        runtime = model_dataset_runtime(_base_config(), "top_k_metrics")
+        self.assertEqual(
+            runtime["target_table"],
+            "demo_catalog.demo_schema.model_top_k_metrics",
+        )
+        self.assertEqual(runtime["target_path"], "")
+
+    def test_model_hyperparameters_are_validated(self) -> None:
+        config = _base_config()
+        config["models"]["random_forest"]["subsampling_rate"] = 1.5
         with self.assertRaises(ValueError):
             validate_project_config(config)
 

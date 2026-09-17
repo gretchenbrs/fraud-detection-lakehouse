@@ -12,6 +12,12 @@ VALID_STORAGE_MODES = {"unity_catalog", "path"}
 VALID_WRITE_MODES = {"append", "overwrite", "errorifexists", "ignore"}
 SILVER_DATASET_NAMES = ("users", "cards", "fraud_labels", "mcc_codes", "transactions")
 FEATURE_DATASET_NAMES = ("split_assignments", "mcc_fraud_rates", "model_features")
+MODEL_DATASET_NAMES = (
+    "scored_predictions",
+    "overall_metrics",
+    "threshold_metrics",
+    "top_k_metrics",
+)
 
 
 def load_project_config(config_path: str) -> dict[str, Any]:
@@ -65,6 +71,7 @@ def validate_project_config(config: dict[str, Any]) -> None:
         "bronze",
         "silver",
         "features",
+        "models",
         "raw_sources",
     ):
         if section_name not in config:
@@ -152,6 +159,71 @@ def validate_project_config(config: dict[str, Any]) -> None:
     if not isinstance(alpha, (int, float)) or alpha <= 0:
         raise ValueError("features.mcc_smoothing_alpha must be positive.")
 
+    models_cfg = config["models"]
+    model_storage_mode = models_cfg.get("storage_mode")
+    if model_storage_mode not in VALID_STORAGE_MODES:
+        raise ValueError(f"models.storage_mode must be one of {sorted(VALID_STORAGE_MODES)}")
+    model_write_mode = models_cfg.get("write_mode")
+    if model_write_mode not in VALID_WRITE_MODES:
+        raise ValueError(f"models.write_mode must be one of {sorted(VALID_WRITE_MODES)}")
+    if model_storage_mode == "path" and not models_cfg.get("base_path"):
+        raise ValueError("models.base_path is required when models.storage_mode=path")
+    for dataset_name in MODEL_DATASET_NAMES:
+        table_name = models_cfg.get("table_names", {}).get(dataset_name)
+        if not table_name:
+            raise ValueError(f"models.table_names.{dataset_name} is required.")
+        validate_identifier(
+            table_name,
+            label=f"models.table_names.{dataset_name}",
+            allow_placeholder=False,
+        )
+
+    thresholds = models_cfg.get("thresholds")
+    if not isinstance(thresholds, list) or not thresholds:
+        raise ValueError("models.thresholds must be a non-empty list.")
+    if any(not isinstance(value, (int, float)) or not 0 < value < 1 for value in thresholds):
+        raise ValueError("Every models.thresholds value must be between 0 and 1.")
+    if thresholds != sorted(set(thresholds)):
+        raise ValueError("models.thresholds must be unique and sorted ascending.")
+
+    top_k_fractions = models_cfg.get("top_k_fractions")
+    if not isinstance(top_k_fractions, list) or not top_k_fractions:
+        raise ValueError("models.top_k_fractions must be a non-empty list.")
+    if any(
+        not isinstance(value, (int, float)) or not 0 < value <= 1
+        for value in top_k_fractions
+    ):
+        raise ValueError("Every models.top_k_fractions value must be in (0, 1].")
+    if top_k_fractions != sorted(set(top_k_fractions)):
+        raise ValueError("models.top_k_fractions must be unique and sorted ascending.")
+
+    seed = models_cfg.get("seed")
+    if not isinstance(seed, int):
+        raise ValueError("models.seed must be an integer.")
+    if not isinstance(models_cfg.get("use_class_weights"), bool):
+        raise ValueError("models.use_class_weights must be true or false.")
+
+    logistic_cfg = models_cfg.get("logistic_regression", {})
+    if not isinstance(logistic_cfg.get("max_iter"), int) or logistic_cfg["max_iter"] <= 0:
+        raise ValueError("models.logistic_regression.max_iter must be a positive integer.")
+    reg_param = logistic_cfg.get("reg_param")
+    if not isinstance(reg_param, (int, float)) or reg_param < 0:
+        raise ValueError("models.logistic_regression.reg_param must be non-negative.")
+    elastic_net_param = logistic_cfg.get("elastic_net_param")
+    if not isinstance(elastic_net_param, (int, float)) or not 0 <= elastic_net_param <= 1:
+        raise ValueError(
+            "models.logistic_regression.elastic_net_param must be between 0 and 1."
+        )
+
+    forest_cfg = models_cfg.get("random_forest", {})
+    for key in ("num_trees", "max_depth", "max_bins"):
+        value = forest_cfg.get(key)
+        if not isinstance(value, int) or value <= 0:
+            raise ValueError(f"models.random_forest.{key} must be a positive integer.")
+    subsampling_rate = forest_cfg.get("subsampling_rate")
+    if not isinstance(subsampling_rate, (int, float)) or not 0 < subsampling_rate <= 1:
+        raise ValueError("models.random_forest.subsampling_rate must be in (0, 1].")
+
 
 def apply_runtime_overrides(
     config: dict[str, Any],
@@ -165,6 +237,7 @@ def apply_runtime_overrides(
     bronze_cfg = resolved["bronze"]
     silver_cfg = resolved["silver"]
     features_cfg = resolved["features"]
+    models_cfg = resolved["models"]
 
     for key in (
         "catalog_name",
@@ -199,6 +272,15 @@ def apply_runtime_overrides(
     ):
         if key in overrides and overrides[key] not in (None, ""):
             features_cfg[key.removeprefix("feature_")] = overrides[key]
+
+    for key in (
+        "model_storage_mode",
+        "model_write_format",
+        "model_write_mode",
+        "model_base_path",
+    ):
+        if key in overrides and overrides[key] not in (None, ""):
+            models_cfg[key.removeprefix("model_")] = overrides[key]
 
     if not overrides.get("raw_data_path"):
         if not any(
@@ -347,4 +429,46 @@ def feature_dataset_runtime(config: dict[str, Any], dataset_name: str) -> dict[s
     else:
         runtime["target_table"] = ""
         runtime["target_path"] = feature_target_path(config, dataset_name)
+    return runtime
+
+
+def model_table_name(config: dict[str, Any], dataset_name: str) -> str:
+    """Return the fully-qualified Unity Catalog model-output table name."""
+    if dataset_name not in MODEL_DATASET_NAMES:
+        raise ValueError(f"Unsupported model dataset: {dataset_name}")
+    catalog_name = config["databricks"]["catalog_name"]
+    schema_name = config["databricks"]["schema_name"]
+    table_name = config["models"]["table_names"][dataset_name]
+    validate_identifier(catalog_name, label="catalog_name", allow_placeholder=False)
+    validate_identifier(schema_name, label="schema_name", allow_placeholder=False)
+    return f"{catalog_name}.{schema_name}.{table_name}"
+
+
+def model_target_path(config: dict[str, Any], dataset_name: str) -> str:
+    """Return the configured Delta path for a model output."""
+    if dataset_name not in MODEL_DATASET_NAMES:
+        raise ValueError(f"Unsupported model dataset: {dataset_name}")
+    overrides = config["models"].get("table_path_overrides", {})
+    if dataset_name in overrides and overrides[dataset_name]:
+        return overrides[dataset_name].rstrip("/")
+    base_path = config["models"]["base_path"].rstrip("/")
+    table_name = config["models"]["table_names"][dataset_name]
+    return f"{base_path}/{table_name}"
+
+
+def model_dataset_runtime(config: dict[str, Any], dataset_name: str) -> dict[str, str]:
+    """Return the resolved target settings for a model output."""
+    model_cfg = config["models"]
+    runtime = {
+        "dataset_name": dataset_name,
+        "storage_mode": model_cfg["storage_mode"],
+        "write_format": model_cfg["write_format"],
+        "write_mode": model_cfg["write_mode"],
+    }
+    if runtime["storage_mode"] == "unity_catalog":
+        runtime["target_table"] = model_table_name(config, dataset_name)
+        runtime["target_path"] = ""
+    else:
+        runtime["target_table"] = ""
+        runtime["target_path"] = model_target_path(config, dataset_name)
     return runtime

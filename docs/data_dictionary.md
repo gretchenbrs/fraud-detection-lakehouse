@@ -206,3 +206,28 @@ point-in-time values in model interpretation.
 
 No class balancing occurs in these tables. Any balancing is restricted to the training input
 inside the later model-training pipeline.
+
+## Model Outputs
+
+### model_scored_predictions
+
+Contains compact validation and test scores for both models. Each row retains transaction ID,
+timestamp, date, split, true label, absolute transaction amount, model name, and fraud score.
+Training predictions are not published as evaluation evidence.
+
+### model_overall_metrics
+
+Contains one row per model and evaluation split with row count, fraud count, natural fraud
+rate, PR-AUC, and ROC-AUC. PR-AUC is the primary ranking metric because fraud is rare.
+
+### model_threshold_metrics
+
+Contains validation results for every configured threshold and one final test row per model at
+the threshold selected by validation F1. Confusion-matrix counts, precision, recall, F1, and
+false-positive rate are explicit. No monetary cost function is implemented or claimed.
+
+### model_top_k_metrics
+
+Contains fraud-count capture, precision at k, and fraudulent-transaction-amount capture for the
+configured top population fractions. Transaction amount is only a proxy for potential exposure;
+the source data does not provide confirmed fraud loss or investigation cost.

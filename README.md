@@ -4,7 +4,8 @@ This repository rebuilds an existing credit-card fraud analysis project as a cle
 
 ## Current Phase
 
-Bronze and Silver are complete, and the first leakage-aware feature pipeline is implemented.
+Bronze, Silver, and leakage-aware feature engineering are complete. The first modeling
+pipeline is implemented for Databricks execution.
 
 This phase includes:
 
@@ -15,10 +16,14 @@ This phase includes:
 - a left-joined Silver transaction fact with explicit match-quality flags
 - chronological train, validation, and test assignments
 - training-only smoothed MCC fraud-rate encoding
+- training-only preprocessing and inverse-frequency class weights
+- logistic-regression baseline and random-forest comparison
+- validation threshold grid with F1-based selection
+- PR-AUC, ROC-AUC, confusion matrix, and top-k capture outputs
 - managed Delta outputs in Unity Catalog
 
-This phase does **not** implement Gold tables, modeling, class balancing, dashboards,
-workflows, or deployment.
+This phase does **not** implement Gold KPI tables, investigation-prioritization marts,
+dashboards, workflows, or deployment.
 
 ## Verified Raw Inputs
 
@@ -79,6 +84,17 @@ remain null, so Silver does not silently turn unlabeled rows into non-fraud exam
 The model feature table contains labeled rows only. Splits are chronological, and the MCC
 rate mapping is fitted from training rows only before being applied to validation and test.
 
+## Model Outputs
+
+- `model_scored_predictions`
+- `model_overall_metrics`
+- `model_threshold_metrics`
+- `model_top_k_metrics`
+
+The baseline is logistic regression and the tree-based comparison is a random forest.
+Class weights are calculated from training rows only. Candidate thresholds are evaluated
+on validation, and test confusion metrics use only the validation-selected threshold.
+
 ## Notebook Run Order
 
 1. [notebooks/00_environment_setup.py](notebooks/00_environment_setup.py)
@@ -87,6 +103,7 @@ rate mapping is fitted from training rows only before being applied to validatio
 4. [notebooks/02_raw_data_profiling.py](notebooks/02_raw_data_profiling.py)
 5. [notebooks/03_silver_pipeline.py](notebooks/03_silver_pipeline.py)
 6. [notebooks/04_feature_engineering.py](notebooks/04_feature_engineering.py)
+7. [notebooks/05_model_training.py](notebooks/05_model_training.py)
 
 ## Repository Layout
 
@@ -119,6 +136,8 @@ fraud-risk-lakehouse/
 - MCC fraud-rate encoding is intentionally deferred to training-only feature logic.
 - Feature tables preserve natural validation and test prevalence; balancing remains a
   model-training concern.
+- Validation F1 is an explicit threshold-selection rule, not a cost-based optimization.
+- Top-k amount capture treats fraudulent transaction amount as a proxy and not confirmed loss.
 
 ## Supporting Documents
 
@@ -135,5 +154,5 @@ python3 -m unittest discover -s tests
 ```
 
 These tests validate configuration, source schemas, output names, Silver rules, chronological
-splits, and the MCC smoothing formula. Databricks notebook runs are the integration tests for
-Spark and Unity Catalog behavior.
+splits, MCC smoothing, class weights, and metric formulas. Databricks notebook runs are the
+integration tests for Spark, Spark ML, and Unity Catalog behavior.
