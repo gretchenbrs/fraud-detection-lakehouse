@@ -16,8 +16,9 @@ The current implementation includes:
 - training-only MCC fraud-rate encoding
 - Spark ML baseline and tree-model comparison
 - threshold and top-k evaluation outputs
+- validation-selected champion model and Gold business outputs
 
-Gold KPI and investigation-prioritization marts remain intentionally out of scope for this phase.
+Dashboards, scheduled workflows, and deployment remain intentionally out of scope for this phase.
 
 ## Source System Boundary
 
@@ -91,11 +92,14 @@ Implemented responsibilities:
 
 ### Gold
 
-Planned responsibilities only, not yet implemented:
+Implemented responsibilities:
 
-- fraud KPI marts
-- investigation-prioritization tables
-- threshold-comparison outputs for business review
+- select the champion model using validation PR-AUC only
+- publish a model scorecard across validation and test
+- summarize daily test risk KPIs at the validation-selected threshold
+- rank a configurable top population fraction for investigation
+- attach interpretable risk-reason fields without using outcomes for prioritization
+- retain test outcomes only for retrospective queue audit
 
 ### Features
 
@@ -167,6 +171,7 @@ The Bronze layer reads these files as whole-text JSON payloads and explodes them
 5. `03_silver_pipeline.py`
 6. `04_feature_engineering.py`
 7. `05_model_training.py`
+8. `06_gold_risk_analytics.py`
 
 ## Data Leakage Guardrails
 
@@ -176,6 +181,7 @@ The Bronze layer reads these files as whole-text JSON payloads and explodes them
 - preprocessing and class weights are fitted on train only
 - threshold selection uses validation only
 - test labels do not influence model fitting or threshold selection
+- test labels do not influence champion selection or investigation priority
 - F1 selection is not described as cost optimization
 
 ## Open Questions

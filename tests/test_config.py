@@ -17,6 +17,8 @@ from src.utils.config import (
     bronze_table_name,
     bronze_target_path,
     build_raw_data_path,
+    gold_dataset_runtime,
+    gold_table_name,
     model_dataset_runtime,
     model_table_name,
     validate_identifier,
@@ -108,6 +110,22 @@ def _base_config() -> dict:
                 "max_bins": 128,
                 "subsampling_rate": 0.7,
             },
+        },
+        "gold": {
+            "storage_mode": "unity_catalog",
+            "write_format": "delta",
+            "write_mode": "overwrite",
+            "table_names": {
+                "model_scorecard": "gold_model_scorecard",
+                "daily_risk_kpis": "gold_daily_risk_kpis",
+                "investigation_queue": "gold_investigation_queue",
+            },
+            "base_path": "dbfs:/tmp/fraud-risk-lakehouse/gold",
+            "table_path_overrides": {},
+            "champion_metric": "pr_auc",
+            "evaluation_split": "test",
+            "investigation_queue_fraction": 0.01,
+            "priority_fractions": [0.001, 0.005, 0.01],
         },
         "raw_sources": {
             "expected_files": {
@@ -206,6 +224,26 @@ class ConfigValidationTests(unittest.TestCase):
     def test_model_hyperparameters_are_validated(self) -> None:
         config = _base_config()
         config["models"]["random_forest"]["subsampling_rate"] = 1.5
+        with self.assertRaises(ValueError):
+            validate_project_config(config)
+
+    def test_gold_table_name_is_fully_qualified(self) -> None:
+        self.assertEqual(
+            gold_table_name(_base_config(), "investigation_queue"),
+            "demo_catalog.demo_schema.gold_investigation_queue",
+        )
+
+    def test_gold_runtime_uses_managed_table(self) -> None:
+        runtime = gold_dataset_runtime(_base_config(), "daily_risk_kpis")
+        self.assertEqual(
+            runtime["target_table"],
+            "demo_catalog.demo_schema.gold_daily_risk_kpis",
+        )
+        self.assertEqual(runtime["target_path"], "")
+
+    def test_gold_queue_fraction_must_cover_priority_cutoffs(self) -> None:
+        config = _base_config()
+        config["gold"]["investigation_queue_fraction"] = 0.004
         with self.assertRaises(ValueError):
             validate_project_config(config)
 

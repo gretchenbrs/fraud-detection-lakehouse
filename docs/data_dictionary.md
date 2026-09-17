@@ -231,3 +231,24 @@ false-positive rate are explicit. No monetary cost function is implemented or cl
 Contains fraud-count capture, precision at k, and fraudulent-transaction-amount capture for the
 configured top population fractions. Transaction amount is only a proxy for potential exposure;
 the source data does not provide confirmed fraud loss or investigation cost.
+
+## Gold Outputs
+
+### gold_model_scorecard
+
+Combines validation and test PR-AUC/ROC-AUC with each model's validation-selected threshold.
+`is_champion` is determined from validation PR-AUC only; test metrics are descriptive evidence.
+
+### gold_daily_risk_kpis
+
+Contains one row per test transaction date for the champion model, including transaction and
+fraud counts, alert rate, precision, recall, total and flagged amount, and fraudulent-amount
+capture at the validation-selected threshold. Amount is exposure proxy, not confirmed loss.
+
+### gold_investigation_queue
+
+Contains the configured highest-scoring fraction of champion-model test predictions, ordered
+by score with amount and transaction ID as deterministic tie breakers. It includes priority
+tier, transaction context, interpretable reason codes, and threshold status. `actual_is_fraud`
+and `outcome_usage=post_outcome_audit_only` are retained solely for retrospective validation;
+neither field participates in ranking.

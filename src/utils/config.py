@@ -18,6 +18,7 @@ MODEL_DATASET_NAMES = (
     "threshold_metrics",
     "top_k_metrics",
 )
+GOLD_DATASET_NAMES = ("model_scorecard", "daily_risk_kpis", "investigation_queue")
 
 
 def load_project_config(config_path: str) -> dict[str, Any]:
@@ -72,6 +73,7 @@ def validate_project_config(config: dict[str, Any]) -> None:
         "silver",
         "features",
         "models",
+        "gold",
         "raw_sources",
     ):
         if section_name not in config:
@@ -224,6 +226,43 @@ def validate_project_config(config: dict[str, Any]) -> None:
     if not isinstance(subsampling_rate, (int, float)) or not 0 < subsampling_rate <= 1:
         raise ValueError("models.random_forest.subsampling_rate must be in (0, 1].")
 
+    gold_cfg = config["gold"]
+    gold_storage_mode = gold_cfg.get("storage_mode")
+    if gold_storage_mode not in VALID_STORAGE_MODES:
+        raise ValueError(f"gold.storage_mode must be one of {sorted(VALID_STORAGE_MODES)}")
+    gold_write_mode = gold_cfg.get("write_mode")
+    if gold_write_mode not in VALID_WRITE_MODES:
+        raise ValueError(f"gold.write_mode must be one of {sorted(VALID_WRITE_MODES)}")
+    if gold_storage_mode == "path" and not gold_cfg.get("base_path"):
+        raise ValueError("gold.base_path is required when gold.storage_mode=path")
+    for dataset_name in GOLD_DATASET_NAMES:
+        table_name = gold_cfg.get("table_names", {}).get(dataset_name)
+        if not table_name:
+            raise ValueError(f"gold.table_names.{dataset_name} is required.")
+        validate_identifier(
+            table_name,
+            label=f"gold.table_names.{dataset_name}",
+            allow_placeholder=False,
+        )
+    if gold_cfg.get("champion_metric") not in {"pr_auc", "roc_auc"}:
+        raise ValueError("gold.champion_metric must be pr_auc or roc_auc.")
+    if gold_cfg.get("evaluation_split") != "test":
+        raise ValueError("gold.evaluation_split must remain test for final reporting.")
+    queue_fraction = gold_cfg.get("investigation_queue_fraction")
+    if not isinstance(queue_fraction, (int, float)) or not 0 < queue_fraction <= 1:
+        raise ValueError("gold.investigation_queue_fraction must be in (0, 1].")
+    priority_fractions = gold_cfg.get("priority_fractions")
+    if not isinstance(priority_fractions, list) or len(priority_fractions) != 3:
+        raise ValueError("gold.priority_fractions must contain three ordered values.")
+    if (
+        any(not isinstance(value, (int, float)) or not 0 < value <= 1 for value in priority_fractions)
+        or priority_fractions != sorted(set(priority_fractions))
+        or priority_fractions[-1] > queue_fraction
+    ):
+        raise ValueError(
+            "gold.priority_fractions must be unique, ascending, and within the queue fraction."
+        )
+
 
 def apply_runtime_overrides(
     config: dict[str, Any],
@@ -238,6 +277,7 @@ def apply_runtime_overrides(
     silver_cfg = resolved["silver"]
     features_cfg = resolved["features"]
     models_cfg = resolved["models"]
+    gold_cfg = resolved["gold"]
 
     for key in (
         "catalog_name",
@@ -281,6 +321,15 @@ def apply_runtime_overrides(
     ):
         if key in overrides and overrides[key] not in (None, ""):
             models_cfg[key.removeprefix("model_")] = overrides[key]
+
+    for key in (
+        "gold_storage_mode",
+        "gold_write_format",
+        "gold_write_mode",
+        "gold_base_path",
+    ):
+        if key in overrides and overrides[key] not in (None, ""):
+            gold_cfg[key.removeprefix("gold_")] = overrides[key]
 
     if not overrides.get("raw_data_path"):
         if not any(
@@ -471,4 +520,45 @@ def model_dataset_runtime(config: dict[str, Any], dataset_name: str) -> dict[str
     else:
         runtime["target_table"] = ""
         runtime["target_path"] = model_target_path(config, dataset_name)
+    return runtime
+
+
+def gold_table_name(config: dict[str, Any], dataset_name: str) -> str:
+    """Return the fully-qualified Unity Catalog Gold table name."""
+    if dataset_name not in GOLD_DATASET_NAMES:
+        raise ValueError(f"Unsupported Gold dataset: {dataset_name}")
+    catalog_name = config["databricks"]["catalog_name"]
+    schema_name = config["databricks"]["schema_name"]
+    table_name = config["gold"]["table_names"][dataset_name]
+    validate_identifier(catalog_name, label="catalog_name", allow_placeholder=False)
+    validate_identifier(schema_name, label="schema_name", allow_placeholder=False)
+    return f"{catalog_name}.{schema_name}.{table_name}"
+
+
+def gold_target_path(config: dict[str, Any], dataset_name: str) -> str:
+    """Return the configured Delta path for a Gold dataset."""
+    if dataset_name not in GOLD_DATASET_NAMES:
+        raise ValueError(f"Unsupported Gold dataset: {dataset_name}")
+    overrides = config["gold"].get("table_path_overrides", {})
+    if dataset_name in overrides and overrides[dataset_name]:
+        return overrides[dataset_name].rstrip("/")
+    base_path = config["gold"]["base_path"].rstrip("/")
+    return f"{base_path}/{config['gold']['table_names'][dataset_name]}"
+
+
+def gold_dataset_runtime(config: dict[str, Any], dataset_name: str) -> dict[str, str]:
+    """Return resolved target settings for a Gold dataset."""
+    gold_cfg = config["gold"]
+    runtime = {
+        "dataset_name": dataset_name,
+        "storage_mode": gold_cfg["storage_mode"],
+        "write_format": gold_cfg["write_format"],
+        "write_mode": gold_cfg["write_mode"],
+    }
+    if runtime["storage_mode"] == "unity_catalog":
+        runtime["target_table"] = gold_table_name(config, dataset_name)
+        runtime["target_path"] = ""
+    else:
+        runtime["target_table"] = ""
+        runtime["target_path"] = gold_target_path(config, dataset_name)
     return runtime

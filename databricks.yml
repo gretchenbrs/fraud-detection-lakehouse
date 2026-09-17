@@ -32,6 +32,12 @@ variables:
   model_base_path:
     description: Base Delta path used only when model_storage_mode=path
     default: "dbfs:/tmp/fraud-risk-lakehouse/models"
+  gold_storage_mode:
+    description: Gold-output write target, either unity_catalog or path
+    default: "unity_catalog"
+  gold_base_path:
+    description: Base Delta path used only when gold_storage_mode=path
+    default: "dbfs:/tmp/fraud-risk-lakehouse/gold"
 
 targets:
   dev:

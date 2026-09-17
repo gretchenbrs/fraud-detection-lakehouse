@@ -97,6 +97,24 @@ models:
     max_bins: 128
     subsampling_rate: 0.7
 
+gold:
+  storage_mode: unity_catalog
+  write_format: delta
+  write_mode: overwrite
+  table_names:
+    model_scorecard: gold_model_scorecard
+    daily_risk_kpis: gold_daily_risk_kpis
+    investigation_queue: gold_investigation_queue
+  base_path: dbfs:/tmp/fraud-risk-lakehouse/gold
+  table_path_overrides: {}
+  champion_metric: pr_auc
+  evaluation_split: test
+  investigation_queue_fraction: 0.01
+  priority_fractions:
+    - 0.001
+    - 0.005
+    - 0.01
+
 raw_sources:
   expected_files:
     transactions: transactions_data.csv
@@ -114,3 +132,4 @@ runtime:
     - Feature splits are chronological and MCC fraud rates are fitted from training rows only.
     - Model preprocessing and class weights are fitted on training rows only.
     - Thresholds are compared on validation data; the test split is reserved for final evaluation.
+    - Gold champion selection uses validation PR-AUC; test labels never select a model or threshold.

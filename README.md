@@ -4,8 +4,8 @@ This repository rebuilds an existing credit-card fraud analysis project as a cle
 
 ## Current Phase
 
-Bronze, Silver, and leakage-aware feature engineering are complete. The first modeling
-pipeline is implemented for Databricks execution.
+Bronze, Silver, leakage-aware feature engineering, model evaluation, and Gold risk
+analytics are implemented for Databricks execution.
 
 This phase includes:
 
@@ -20,10 +20,11 @@ This phase includes:
 - logistic-regression baseline and random-forest comparison
 - validation threshold grid with F1-based selection
 - PR-AUC, ROC-AUC, confusion matrix, and top-k capture outputs
+- validation-only champion-model selection
+- a Gold model scorecard, daily risk KPI mart, and ranked investigation queue
 - managed Delta outputs in Unity Catalog
 
-This phase does **not** implement Gold KPI tables, investigation-prioritization marts,
-dashboards, workflows, or deployment.
+This phase does **not** implement dashboards, workflows, or deployment.
 
 ## Verified Raw Inputs
 
@@ -95,6 +96,16 @@ The baseline is logistic regression and the tree-based comparison is a random fo
 Class weights are calculated from training rows only. Candidate thresholds are evaluated
 on validation, and test confusion metrics use only the validation-selected threshold.
 
+## Gold Outputs
+
+- `gold_model_scorecard`
+- `gold_daily_risk_kpis`
+- `gold_investigation_queue`
+
+The champion model is selected by validation PR-AUC. Investigation priority is based on
+model score with deterministic business-field tie breaking. The true test outcome is
+retained only for retrospective audit and never influences queue rank.
+
 ## Notebook Run Order
 
 1. [notebooks/00_environment_setup.py](notebooks/00_environment_setup.py)
@@ -104,6 +115,7 @@ on validation, and test confusion metrics use only the validation-selected thres
 5. [notebooks/03_silver_pipeline.py](notebooks/03_silver_pipeline.py)
 6. [notebooks/04_feature_engineering.py](notebooks/04_feature_engineering.py)
 7. [notebooks/05_model_training.py](notebooks/05_model_training.py)
+8. [notebooks/06_gold_risk_analytics.py](notebooks/06_gold_risk_analytics.py)
 
 ## Repository Layout
 
@@ -138,6 +150,7 @@ fraud-risk-lakehouse/
   model-training concern.
 - Validation F1 is an explicit threshold-selection rule, not a cost-based optimization.
 - Top-k amount capture treats fraudulent transaction amount as a proxy and not confirmed loss.
+- Gold champion selection uses validation PR-AUC; test labels remain evaluation evidence only.
 
 ## Supporting Documents
 
@@ -153,6 +166,6 @@ Run the lightweight non-Spark tests from the repository root:
 python3 -m unittest discover -s tests
 ```
 
-These tests validate configuration, source schemas, output names, Silver rules, chronological
-splits, MCC smoothing, class weights, and metric formulas. Databricks notebook runs are the
-integration tests for Spark, Spark ML, and Unity Catalog behavior.
+These tests validate configuration, source schemas, output names, Silver and Gold rules,
+chronological splits, MCC smoothing, class weights, and metric formulas. Databricks notebook
+runs are the integration tests for Spark, Spark ML, and Unity Catalog behavior.
