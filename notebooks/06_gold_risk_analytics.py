@@ -56,8 +56,8 @@ if project_root not in sys.path:
 
 # COMMAND ----------
 
+from src.bronze.ingest import resolve_runtime_project_config
 from src.gold.pipeline import load_gold_dataset, run_gold_pipeline
-from src.utils.config import resolve_runtime_project_config
 
 # COMMAND ----------
 
