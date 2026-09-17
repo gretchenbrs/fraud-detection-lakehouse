@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import date
 from typing import Any
 
 from src.utils.schemas import dataset_names, expected_source_file_name
@@ -10,6 +11,7 @@ from src.utils.schemas import dataset_names, expected_source_file_name
 VALID_STORAGE_MODES = {"unity_catalog", "path"}
 VALID_WRITE_MODES = {"append", "overwrite", "errorifexists", "ignore"}
 SILVER_DATASET_NAMES = ("users", "cards", "fraud_labels", "mcc_codes", "transactions")
+FEATURE_DATASET_NAMES = ("split_assignments", "mcc_fraud_rates", "model_features")
 
 
 def load_project_config(config_path: str) -> dict[str, Any]:
@@ -57,7 +59,14 @@ def build_raw_data_path(
 
 def validate_project_config(config: dict[str, Any]) -> None:
     """Validate the minimum config contract needed by Bronze and Silver."""
-    for section_name in ("project", "databricks", "bronze", "silver", "raw_sources"):
+    for section_name in (
+        "project",
+        "databricks",
+        "bronze",
+        "silver",
+        "features",
+        "raw_sources",
+    ):
         if section_name not in config:
             raise ValueError(f"project_config.yml is missing the '{section_name}' section.")
 
@@ -113,6 +122,36 @@ def validate_project_config(config: dict[str, Any]) -> None:
     if night_start >= night_end:
         raise ValueError("Silver night hours must be a non-wrapping interval.")
 
+    features_cfg = config["features"]
+    feature_storage_mode = features_cfg.get("storage_mode")
+    if feature_storage_mode not in VALID_STORAGE_MODES:
+        raise ValueError(f"features.storage_mode must be one of {sorted(VALID_STORAGE_MODES)}")
+    feature_write_mode = features_cfg.get("write_mode")
+    if feature_write_mode not in VALID_WRITE_MODES:
+        raise ValueError(f"features.write_mode must be one of {sorted(VALID_WRITE_MODES)}")
+    if feature_storage_mode == "path" and not features_cfg.get("base_path"):
+        raise ValueError("features.base_path is required when features.storage_mode=path")
+    for dataset_name in FEATURE_DATASET_NAMES:
+        table_name = features_cfg.get("table_names", {}).get(dataset_name)
+        if not table_name:
+            raise ValueError(f"features.table_names.{dataset_name} is required.")
+        validate_identifier(
+            table_name,
+            label=f"features.table_names.{dataset_name}",
+            allow_placeholder=False,
+        )
+
+    try:
+        train_end_date = date.fromisoformat(features_cfg["train_end_date"])
+        validation_end_date = date.fromisoformat(features_cfg["validation_end_date"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Feature split dates must use YYYY-MM-DD format.") from exc
+    if train_end_date >= validation_end_date:
+        raise ValueError("features.train_end_date must be before validation_end_date.")
+    alpha = features_cfg.get("mcc_smoothing_alpha")
+    if not isinstance(alpha, (int, float)) or alpha <= 0:
+        raise ValueError("features.mcc_smoothing_alpha must be positive.")
+
 
 def apply_runtime_overrides(
     config: dict[str, Any],
@@ -125,6 +164,7 @@ def apply_runtime_overrides(
     databricks_cfg = resolved["databricks"]
     bronze_cfg = resolved["bronze"]
     silver_cfg = resolved["silver"]
+    features_cfg = resolved["features"]
 
     for key in (
         "catalog_name",
@@ -150,6 +190,15 @@ def apply_runtime_overrides(
     ):
         if key in overrides and overrides[key] not in (None, ""):
             silver_cfg[key.removeprefix("silver_")] = overrides[key]
+
+    for key in (
+        "feature_storage_mode",
+        "feature_write_format",
+        "feature_write_mode",
+        "feature_base_path",
+    ):
+        if key in overrides and overrides[key] not in (None, ""):
+            features_cfg[key.removeprefix("feature_")] = overrides[key]
 
     if not overrides.get("raw_data_path"):
         if not any(
@@ -256,4 +305,46 @@ def silver_dataset_runtime(config: dict[str, Any], dataset_name: str) -> dict[st
     else:
         runtime["target_table"] = ""
         runtime["target_path"] = silver_target_path(config, dataset_name)
+    return runtime
+
+
+def feature_table_name(config: dict[str, Any], dataset_name: str) -> str:
+    """Return the fully-qualified Unity Catalog feature table name."""
+    if dataset_name not in FEATURE_DATASET_NAMES:
+        raise ValueError(f"Unsupported feature dataset: {dataset_name}")
+    catalog_name = config["databricks"]["catalog_name"]
+    schema_name = config["databricks"]["schema_name"]
+    table_name = config["features"]["table_names"][dataset_name]
+    validate_identifier(catalog_name, label="catalog_name", allow_placeholder=False)
+    validate_identifier(schema_name, label="schema_name", allow_placeholder=False)
+    return f"{catalog_name}.{schema_name}.{table_name}"
+
+
+def feature_target_path(config: dict[str, Any], dataset_name: str) -> str:
+    """Return the configured Delta path for a feature dataset."""
+    if dataset_name not in FEATURE_DATASET_NAMES:
+        raise ValueError(f"Unsupported feature dataset: {dataset_name}")
+    overrides = config["features"].get("table_path_overrides", {})
+    if dataset_name in overrides and overrides[dataset_name]:
+        return overrides[dataset_name].rstrip("/")
+    base_path = config["features"]["base_path"].rstrip("/")
+    table_name = config["features"]["table_names"][dataset_name]
+    return f"{base_path}/{table_name}"
+
+
+def feature_dataset_runtime(config: dict[str, Any], dataset_name: str) -> dict[str, str]:
+    """Return the resolved target settings for one feature dataset."""
+    feature_cfg = config["features"]
+    runtime = {
+        "dataset_name": dataset_name,
+        "storage_mode": feature_cfg["storage_mode"],
+        "write_format": feature_cfg["write_format"],
+        "write_mode": feature_cfg["write_mode"],
+    }
+    if runtime["storage_mode"] == "unity_catalog":
+        runtime["target_table"] = feature_table_name(config, dataset_name)
+        runtime["target_path"] = ""
+    else:
+        runtime["target_table"] = ""
+        runtime["target_path"] = feature_target_path(config, dataset_name)
     return runtime

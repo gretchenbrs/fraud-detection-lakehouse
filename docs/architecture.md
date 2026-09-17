@@ -12,6 +12,8 @@ The current implementation includes:
 - raw-data profiling
 - Silver cleaning and conformed dimensions
 - a Silver enriched transaction fact
+- chronological feature splits
+- training-only MCC fraud-rate encoding
 
 Gold and modeling remain intentionally out of scope for this phase.
 
@@ -89,10 +91,21 @@ Implemented responsibilities:
 
 Planned responsibilities only, not yet implemented:
 
-- model-ready feature tables
 - fraud KPI marts
 - investigation-prioritization tables
 - threshold-comparison outputs for business review
+
+### Features
+
+Implemented responsibilities:
+
+- retain only explicitly labeled rows for model development
+- assign train, validation, and test by transaction date
+- preserve natural validation and test class prevalence
+- create label-independent behavioral and financial ratios
+- fit smoothed MCC fraud rates from training rows only
+- use the global training fraud rate for MCC values unseen during training
+- retain identifiers for traceability without treating them as model features
 
 ## Dataset Relationship Assumptions And Status
 
@@ -134,13 +147,12 @@ The Bronze layer reads these files as whole-text JSON payloads and explodes them
 3. `01_bronze_validation.py`
 4. `02_raw_data_profiling.py`
 5. `03_silver_pipeline.py`
+6. `04_feature_engineering.py`
 
-## Silver Guardrails
+## Data Leakage Guardrails
 
 - no sampling or class balancing
-- no time split yet
-- no target-conditioned aggregations
-- no MCC fraud-rate encoding
+- no target-conditioned aggregation outside the training split
 - no conversion of missing labels to zero
 
 ## Open Questions

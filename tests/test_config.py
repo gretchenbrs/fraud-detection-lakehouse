@@ -64,6 +64,21 @@ def _base_config() -> dict:
             "night_start_hour": 0,
             "night_end_hour": 6,
         },
+        "features": {
+            "storage_mode": "unity_catalog",
+            "write_format": "delta",
+            "write_mode": "overwrite",
+            "table_names": {
+                "split_assignments": "feature_split_assignments",
+                "mcc_fraud_rates": "feature_mcc_fraud_rates",
+                "model_features": "feature_model_features",
+            },
+            "base_path": "dbfs:/tmp/fraud-risk-lakehouse/features",
+            "table_path_overrides": {},
+            "train_end_date": "2017-12-31",
+            "validation_end_date": "2018-12-31",
+            "mcc_smoothing_alpha": 100.0,
+        },
         "raw_sources": {
             "expected_files": {
                 "transactions": "transactions_data.csv",
@@ -128,6 +143,13 @@ class ConfigValidationTests(unittest.TestCase):
     def test_silver_config_requires_all_output_tables(self) -> None:
         config = _base_config()
         del config["silver"]["table_names"]["transactions"]
+        with self.assertRaises(ValueError):
+            validate_project_config(config)
+
+    def test_feature_split_dates_must_be_chronological(self) -> None:
+        config = _base_config()
+        config["features"]["train_end_date"] = "2019-01-01"
+        config["features"]["validation_end_date"] = "2018-12-31"
         with self.assertRaises(ValueError):
             validate_project_config(config)
 

@@ -4,7 +4,7 @@ This repository rebuilds an existing credit-card fraud analysis project as a cle
 
 ## Current Phase
 
-Bronze ingestion is complete and the first Silver pipeline is implemented.
+Bronze and Silver are complete, and the first leakage-aware feature pipeline is implemented.
 
 This phase includes:
 
@@ -13,10 +13,12 @@ This phase includes:
 - Spark-native amount, timestamp, error, and location cleaning
 - typed user, card, fraud-label, and MCC Silver dimensions
 - a left-joined Silver transaction fact with explicit match-quality flags
+- chronological train, validation, and test assignments
+- training-only smoothed MCC fraud-rate encoding
 - managed Delta outputs in Unity Catalog
 
-This phase does **not** implement Gold tables, modeling, class balancing, target encoding,
-dashboards, workflows, or deployment.
+This phase does **not** implement Gold tables, modeling, class balancing, dashboards,
+workflows, or deployment.
 
 ## Verified Raw Inputs
 
@@ -68,6 +70,15 @@ The intended Bronze table names are:
 `silver_transactions` preserves every Bronze transaction through left joins. Missing labels
 remain null, so Silver does not silently turn unlabeled rows into non-fraud examples.
 
+## Feature Tables
+
+- `feature_split_assignments`
+- `feature_mcc_fraud_rates`
+- `feature_model_features`
+
+The model feature table contains labeled rows only. Splits are chronological, and the MCC
+rate mapping is fitted from training rows only before being applied to validation and test.
+
 ## Notebook Run Order
 
 1. [notebooks/00_environment_setup.py](notebooks/00_environment_setup.py)
@@ -75,6 +86,7 @@ remain null, so Silver does not silently turn unlabeled rows into non-fraud exam
 3. [notebooks/01_bronze_validation.py](notebooks/01_bronze_validation.py)
 4. [notebooks/02_raw_data_profiling.py](notebooks/02_raw_data_profiling.py)
 5. [notebooks/03_silver_pipeline.py](notebooks/03_silver_pipeline.py)
+6. [notebooks/04_feature_engineering.py](notebooks/04_feature_engineering.py)
 
 ## Repository Layout
 
@@ -105,6 +117,8 @@ fraud-risk-lakehouse/
 - Raw card numbers, CVVs, and user street addresses stay in Bronze and are excluded from
   Silver outputs.
 - MCC fraud-rate encoding is intentionally deferred to training-only feature logic.
+- Feature tables preserve natural validation and test prevalence; balancing remains a
+  model-training concern.
 
 ## Supporting Documents
 
@@ -120,5 +134,6 @@ Run the lightweight non-Spark tests from the repository root:
 python3 -m unittest discover -s tests
 ```
 
-These tests validate configuration, source schemas, output names, and Silver rule contracts.
-The Databricks notebook run is the integration test for Spark and Unity Catalog behavior.
+These tests validate configuration, source schemas, output names, Silver rules, chronological
+splits, and the MCC smoothing formula. Databricks notebook runs are the integration tests for
+Spark and Unity Catalog behavior.

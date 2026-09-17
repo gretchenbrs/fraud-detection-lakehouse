@@ -163,3 +163,46 @@ fields use numeric Spark types, and Yes/No fields become booleans or binary labe
 Raw card number, CVV, and user street address remain available only in Bronze.
 
 No Silver table contains class-balanced data or training-only fraud-rate encodings.
+
+## Feature Outputs
+
+### feature_split_assignments
+
+Contains one row per labeled transaction with its immutable transaction timestamp, date,
+binary label, and chronological `data_split`.
+
+- `train`: transaction date through `2017-12-31`
+- `validation`: `2018-01-01` through `2018-12-31`
+- `test`: transaction date from `2019-01-01` onward
+
+Unlabeled transactions remain in Silver and are not silently treated as negative examples.
+
+### feature_mcc_fraud_rates
+
+Contains MCC counts and additive-smoothed fraud rates fitted only from `train` rows:
+
+```text
+(training_mcc_fraud_count + alpha * training_global_fraud_rate)
+/
+(training_mcc_count + alpha)
+```
+
+The configured `alpha` is `100.0`. MCC values absent from training receive the global
+training fraud rate when model features are assembled.
+
+### feature_model_features
+
+Contains labeled, chronologically split rows with:
+
+- transaction amount, time, channel, location, and error signals
+- age at transaction, account age, and PIN-change age
+- card and user snapshot attributes with a `snapshot_` prefix
+- debt-to-income and amount-to-credit-limit ratios
+- MCC category and the training-only smoothed MCC fraud rate
+
+The snapshot prefix is intentional: the raw files do not provide effective-date history for
+income, debt, credit score, or credit limit. These fields must not be described as strict
+point-in-time values in model interpretation.
+
+No class balancing occurs in these tables. Any balancing is restricted to the training input
+inside the later model-training pipeline.

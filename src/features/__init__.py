@@ -1,1 +1,1 @@
-"""Feature-engineering package placeholder."""
+"""Leakage-aware feature engineering and chronological data splits."""

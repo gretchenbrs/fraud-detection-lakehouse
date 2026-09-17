@@ -40,6 +40,20 @@ silver:
   night_start_hour: 0
   night_end_hour: 6
 
+features:
+  storage_mode: unity_catalog
+  write_format: delta
+  write_mode: overwrite
+  table_names:
+    split_assignments: feature_split_assignments
+    mcc_fraud_rates: feature_mcc_fraud_rates
+    model_features: feature_model_features
+  base_path: dbfs:/tmp/fraud-risk-lakehouse/features
+  table_path_overrides: {}
+  train_end_date: "2017-12-31"
+  validation_end_date: "2018-12-31"
+  mcc_smoothing_alpha: 100.0
+
 raw_sources:
   expected_files:
     transactions: transactions_data.csv
@@ -54,3 +68,4 @@ runtime:
     - Unity Catalog managed tables are preferred when the workspace supports them.
     - Set bronze.storage_mode to path to write Delta files under bronze.base_path instead of managed tables.
     - Bronze and Silver use overwrite for reproducible portfolio runs; production pipelines should use incremental writes.
+    - Feature splits are chronological and MCC fraud rates are fitted from training rows only.
