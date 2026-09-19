@@ -22,6 +22,7 @@ This phase includes:
 - PR-AUC, ROC-AUC, confusion matrix, and top-k capture outputs
 - validation-only champion-model selection
 - a Gold model scorecard, daily risk KPI mart, and ranked investigation queue
+- dashboard-ready business reporting views and Databricks SQL queries
 - managed Delta outputs in Unity Catalog
 
 This phase does **not** implement dashboards, workflows, or deployment.
@@ -116,6 +117,7 @@ retained only for retrospective audit and never influences queue rank.
 6. [notebooks/04_feature_engineering.py](notebooks/04_feature_engineering.py)
 7. [notebooks/05_model_training.py](notebooks/05_model_training.py)
 8. [notebooks/06_gold_risk_analytics.py](notebooks/06_gold_risk_analytics.py)
+9. [notebooks/07_business_reporting.py](notebooks/07_business_reporting.py)
 
 ## Repository Layout
 
@@ -157,6 +159,7 @@ fraud-risk-lakehouse/
 - [docs/architecture.md](docs/architecture.md)
 - [docs/data_dictionary.md](docs/data_dictionary.md)
 - [docs/raw_data_profile.md](docs/raw_data_profile.md)
+- [docs/dashboard_guide.md](docs/dashboard_guide.md)
 
 ## Local Tests
 

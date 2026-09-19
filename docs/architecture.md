@@ -17,6 +17,7 @@ The current implementation includes:
 - Spark ML baseline and tree-model comparison
 - threshold and top-k evaluation outputs
 - validation-selected champion model and Gold business outputs
+- dashboard-ready business summaries and investigation views
 
 Dashboards, scheduled workflows, and deployment remain intentionally out of scope for this phase.
 
@@ -172,6 +173,7 @@ The Bronze layer reads these files as whole-text JSON payloads and explodes them
 6. `04_feature_engineering.py`
 7. `05_model_training.py`
 8. `06_gold_risk_analytics.py`
+9. `07_business_reporting.py`
 
 ## Data Leakage Guardrails
 
