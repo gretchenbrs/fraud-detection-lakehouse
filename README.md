@@ -4,8 +4,8 @@ This repository rebuilds an existing credit-card fraud analysis project as a cle
 
 ## Current Phase
 
-Bronze, Silver, leakage-aware feature engineering, model evaluation, and Gold risk
-analytics are implemented for Databricks execution.
+Bronze, Silver, leakage-aware feature engineering, model evaluation, Gold risk
+analytics, and a version-controlled AI/BI dashboard are implemented for Databricks.
 
 This phase includes:
 
@@ -23,9 +23,11 @@ This phase includes:
 - validation-only champion-model selection
 - a Gold model scorecard, daily risk KPI mart, and ranked investigation queue
 - dashboard-ready business reporting views and Databricks SQL queries
+- a three-page Databricks AI/BI dashboard managed as a Bundle resource
 - managed Delta outputs in Unity Catalog
 
-This phase does **not** implement dashboards, workflows, or deployment.
+This phase does **not** yet implement a scheduled end-to-end workflow. Dashboard deployment
+is declarative through the Databricks Bundle and requires an authenticated CLI session.
 
 ## Verified Raw Inputs
 

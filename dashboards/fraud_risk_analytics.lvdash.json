@@ -1,0 +1,537 @@
+{
+  "datasets": [
+    {
+      "name": "executive_kpis",
+      "displayName": "Executive operating KPIs",
+      "queryLines": [
+        "SELECT MAX(model_name) AS model_name, MAX(selected_threshold) AS selected_threshold, ",
+        "SUM(transaction_count) AS transaction_count, SUM(fraud_count) AS fraud_count, ",
+        "SUM(flagged_count) AS flagged_count, ",
+        "SUM(true_positive_count) / NULLIF(SUM(flagged_count), 0) AS precision, ",
+        "SUM(true_positive_count) / NULLIF(SUM(fraud_count), 0) AS recall, ",
+        "SUM(flagged_count) / NULLIF(SUM(transaction_count), 0) AS alert_rate, ",
+        "SUM(captured_fraud_amount) / NULLIF(SUM(fraud_amount), 0) AS fraud_amount_capture_rate ",
+        "FROM gold_daily_risk_kpis"
+      ]
+    },
+    {
+      "name": "model_scorecard",
+      "displayName": "Champion model evidence",
+      "queryLines": [
+        "SELECT model_name, evaluation_split, pr_auc, roc_auc, selected_threshold, fraud_rate, row_count ",
+        "FROM gold_model_scorecard WHERE is_champion = true ORDER BY evaluation_split"
+      ]
+    },
+    {
+      "name": "monthly_risk",
+      "displayName": "Monthly risk trend",
+      "queryLines": [
+        "SELECT DATE_TRUNC('month', transaction_date) AS transaction_month, ",
+        "SUM(transaction_count) AS transaction_count, ",
+        "SUM(fraud_count) / NULLIF(SUM(transaction_count), 0) AS fraud_rate, ",
+        "SUM(flagged_count) / NULLIF(SUM(transaction_count), 0) AS alert_rate, ",
+        "SUM(true_positive_count) / NULLIF(SUM(flagged_count), 0) AS precision, ",
+        "SUM(true_positive_count) / NULLIF(SUM(fraud_count), 0) AS recall ",
+        "FROM gold_daily_risk_kpis GROUP BY 1 ORDER BY 1"
+      ]
+    },
+    {
+      "name": "queue_priority",
+      "displayName": "Queue by priority",
+      "queryLines": [
+        "SELECT priority_tier, COUNT(*) AS queue_count, AVG(score) AS average_score, ",
+        "SUM(amount_abs) AS queued_exposure_amount, ",
+        "SUM(CAST(is_above_selected_threshold AS BIGINT)) AS above_threshold_count ",
+        "FROM gold_investigation_queue GROUP BY priority_tier ",
+        "ORDER BY CASE priority_tier WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END"
+      ]
+    },
+    {
+      "name": "queue_mcc",
+      "displayName": "Top merchant categories",
+      "queryLines": [
+        "SELECT COALESCE(mcc_category, 'unknown') AS mcc_category, COUNT(*) AS queue_count, ",
+        "AVG(score) AS average_score, SUM(amount_abs) AS queued_exposure_amount ",
+        "FROM gold_investigation_queue GROUP BY 1 ORDER BY queue_count DESC LIMIT 15"
+      ]
+    },
+    {
+      "name": "operational_queue",
+      "displayName": "Operational investigation queue",
+      "queryLines": [
+        "SELECT investigation_rank, priority_tier, transaction_id, transaction_timestamp, score, ",
+        "amount_abs, is_above_selected_threshold, transaction_type, merchant_location_category, ",
+        "mcc_category, risk_reason_codes FROM gold_investigation_queue ",
+        "ORDER BY investigation_rank LIMIT 100"
+      ]
+    },
+    {
+      "name": "queue_audit",
+      "displayName": "Retrospective queue audit",
+      "queryLines": [
+        "SELECT priority_tier, COUNT(*) AS queue_count, ",
+        "SUM(CAST(actual_is_fraud AS BIGINT)) AS captured_fraud_count, ",
+        "SUM(CAST(actual_is_fraud AS BIGINT)) / NULLIF(COUNT(*), 0) AS audit_precision, ",
+        "SUM(CASE WHEN actual_is_fraud = 1 THEN amount_abs ELSE 0 END) AS captured_fraud_exposure_amount ",
+        "FROM gold_investigation_queue GROUP BY priority_tier ",
+        "ORDER BY CASE priority_tier WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "executive_overview",
+      "displayName": "Executive Overview",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "overview_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Financial Transaction Risk Analytics\n",
+                "\n",
+                "Test-period model evidence, risk trends, and investigation workload. Amount metrics represent exposure proxies, not confirmed financial loss."
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "precision_kpi",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "executive_kpis",
+                "fields": [{"name": "precision", "expression": "`precision`"}],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "precision",
+                  "displayName": "Precision",
+                  "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 2}}
+                }
+              },
+              "frame": {"showTitle": true, "title": "Alert Precision"}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "recall_kpi",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "executive_kpis",
+                "fields": [{"name": "recall", "expression": "`recall`"}],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "recall",
+                  "displayName": "Recall",
+                  "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 2}}
+                }
+              },
+              "frame": {"showTitle": true, "title": "Fraud Recall"}
+            }
+          },
+          "position": {"x": 3, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "alert_rate_kpi",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "executive_kpis",
+                "fields": [{"name": "alert_rate", "expression": "`alert_rate`"}],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "alert_rate",
+                  "displayName": "Alert Rate",
+                  "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 2}}
+                }
+              },
+              "frame": {"showTitle": true, "title": "Investigation Rate"}
+            }
+          },
+          "position": {"x": 6, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "amount_capture_kpi",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "executive_kpis",
+                "fields": [{"name": "fraud_amount_capture_rate", "expression": "`fraud_amount_capture_rate`"}],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "fraud_amount_capture_rate",
+                  "displayName": "Exposure Capture",
+                  "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 2}}
+                }
+              },
+              "frame": {"showTitle": true, "title": "Fraud Exposure Capture"}
+            }
+          },
+          "position": {"x": 9, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "monthly_risk_chart",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "monthly_risk",
+                "fields": [
+                  {"name": "transaction_month", "expression": "`transaction_month`"},
+                  {"name": "fraud_rate", "expression": "`fraud_rate`"},
+                  {"name": "alert_rate", "expression": "`alert_rate`"},
+                  {"name": "precision", "expression": "`precision`"},
+                  {"name": "recall", "expression": "`recall`"}
+                ],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {"fieldName": "transaction_month", "scale": {"type": "temporal"}},
+                "y": {
+                  "scale": {"type": "quantitative"},
+                  "fields": [
+                    {"fieldName": "fraud_rate", "displayName": "Fraud Rate", "format": {"type": "number-percent"}},
+                    {"fieldName": "alert_rate", "displayName": "Alert Rate", "format": {"type": "number-percent"}},
+                    {"fieldName": "precision", "displayName": "Precision", "format": {"type": "number-percent"}},
+                    {"fieldName": "recall", "displayName": "Recall", "format": {"type": "number-percent"}}
+                  ]
+                }
+              },
+              "frame": {"showTitle": true, "title": "Monthly Risk and Operating Performance"}
+            }
+          },
+          "position": {"x": 0, "y": 5, "width": 12, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "priority_mix_chart",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "queue_priority",
+                "fields": [
+                  {"name": "priority_tier", "expression": "`priority_tier`"},
+                  {"name": "queue_count", "expression": "`queue_count`"}
+                ],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "priority_tier",
+                  "scale": {"type": "categorical", "sort": {"by": "custom-order", "orderedValues": ["critical", "high", "medium"]}}
+                },
+                "y": {"fieldName": "queue_count", "scale": {"type": "quantitative"}},
+                "color": {
+                  "fieldName": "priority_tier",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {"value": "critical", "color": "#D55E00"},
+                      {"value": "high", "color": "#E69F00"},
+                      {"value": "medium", "color": "#0072B2"}
+                    ]
+                  }
+                }
+              },
+              "frame": {"showTitle": true, "title": "Investigation Queue by Priority"}
+            }
+          },
+          "position": {"x": 0, "y": 11, "width": 5, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "mcc_mix_chart",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "queue_mcc",
+                "fields": [
+                  {"name": "mcc_category", "expression": "`mcc_category`"},
+                  {"name": "queue_count", "expression": "`queue_count`"}
+                ],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {"fieldName": "queue_count", "scale": {"type": "quantitative"}},
+                "y": {"fieldName": "mcc_category", "scale": {"type": "categorical", "sort": {"by": "value"}}}
+              },
+              "frame": {"showTitle": true, "title": "Top Merchant Categories in Queue"}
+            }
+          },
+          "position": {"x": 5, "y": 11, "width": 7, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "scorecard_table",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "model_scorecard",
+                "fields": [
+                  {"name": "model_name", "expression": "`model_name`"},
+                  {"name": "evaluation_split", "expression": "`evaluation_split`"},
+                  {"name": "pr_auc", "expression": "`pr_auc`"},
+                  {"name": "roc_auc", "expression": "`roc_auc`"},
+                  {"name": "selected_threshold", "expression": "`selected_threshold`"},
+                  {"name": "fraud_rate", "expression": "`fraud_rate`"},
+                  {"name": "row_count", "expression": "`row_count`"}
+                ],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "model_name", "displayName": "Champion Model"},
+                  {"fieldName": "evaluation_split", "displayName": "Split"},
+                  {"fieldName": "pr_auc", "displayName": "PR-AUC"},
+                  {"fieldName": "roc_auc", "displayName": "ROC-AUC"},
+                  {"fieldName": "selected_threshold", "displayName": "Threshold"},
+                  {"fieldName": "fraud_rate", "displayName": "Natural Fraud Rate", "format": {"type": "number-percent"}},
+                  {"fieldName": "row_count", "displayName": "Rows"}
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "showDescription": true,
+                "title": "Champion Model Evidence",
+                "description": "Selected by validation PR-AUC; threshold selected on validation F1."
+              }
+            }
+          },
+          "position": {"x": 0, "y": 17, "width": 12, "height": 5}
+        }
+      ]
+    },
+    {
+      "name": "investigation_operations",
+      "displayName": "Investigation Operations",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "operations_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Investigation Operations\n",
+                "\n",
+                "Ranked test-period cases for analyst review. Outcome labels are intentionally excluded from this operational view."
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "operational_queue_table",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "operational_queue",
+                "fields": [
+                  {"name": "investigation_rank", "expression": "`investigation_rank`"},
+                  {"name": "priority_tier", "expression": "`priority_tier`"},
+                  {"name": "transaction_id", "expression": "`transaction_id`"},
+                  {"name": "transaction_timestamp", "expression": "`transaction_timestamp`"},
+                  {"name": "score", "expression": "`score`"},
+                  {"name": "amount_abs", "expression": "`amount_abs`"},
+                  {"name": "is_above_selected_threshold", "expression": "`is_above_selected_threshold`"},
+                  {"name": "transaction_type", "expression": "`transaction_type`"},
+                  {"name": "merchant_location_category", "expression": "`merchant_location_category`"},
+                  {"name": "mcc_category", "expression": "`mcc_category`"},
+                  {"name": "risk_reason_codes", "expression": "`risk_reason_codes`"}
+                ],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "investigation_rank", "displayName": "Rank"},
+                  {"fieldName": "priority_tier", "displayName": "Priority"},
+                  {"fieldName": "transaction_id", "displayName": "Transaction ID"},
+                  {"fieldName": "transaction_timestamp", "displayName": "Timestamp"},
+                  {"fieldName": "score", "displayName": "Risk Score"},
+                  {"fieldName": "amount_abs", "displayName": "Exposure Amount", "format": {"type": "number-currency", "currencyCode": "USD", "decimalPlaces": {"type": "max", "places": 2}}},
+                  {"fieldName": "is_above_selected_threshold", "displayName": "Above Threshold"},
+                  {"fieldName": "transaction_type", "displayName": "Channel"},
+                  {"fieldName": "merchant_location_category", "displayName": "Geography"},
+                  {"fieldName": "mcc_category", "displayName": "Merchant Category"},
+                  {"fieldName": "risk_reason_codes", "displayName": "Risk Reasons"}
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "showDescription": true,
+                "title": "Top 100 Investigation Cases",
+                "description": "Rank uses model score and deterministic business tie-breakers; no outcome label is exposed."
+              }
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 12, "height": 12}
+        }
+      ]
+    },
+    {
+      "name": "retrospective_audit",
+      "displayName": "Retrospective Audit",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "audit_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Retrospective Queue Audit\n",
+                "\n",
+                "Post-outcome evaluation only. These labels must never be used for operational prioritization or model selection."
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "audit_precision_chart",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "queue_audit",
+                "fields": [
+                  {"name": "priority_tier", "expression": "`priority_tier`"},
+                  {"name": "audit_precision", "expression": "`audit_precision`"}
+                ],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "priority_tier",
+                  "scale": {"type": "categorical", "sort": {"by": "custom-order", "orderedValues": ["critical", "high", "medium"]}}
+                },
+                "y": {
+                  "fieldName": "audit_precision",
+                  "scale": {"type": "quantitative"},
+                  "format": {"type": "number-percent"}
+                },
+                "color": {
+                  "fieldName": "priority_tier",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {"value": "critical", "color": "#D55E00"},
+                      {"value": "high", "color": "#E69F00"},
+                      {"value": "medium", "color": "#0072B2"}
+                    ]
+                  }
+                }
+              },
+              "frame": {"showTitle": true, "title": "Retrospective Precision by Priority"}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "audit_table",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "queue_audit",
+                "fields": [
+                  {"name": "priority_tier", "expression": "`priority_tier`"},
+                  {"name": "queue_count", "expression": "`queue_count`"},
+                  {"name": "captured_fraud_count", "expression": "`captured_fraud_count`"},
+                  {"name": "audit_precision", "expression": "`audit_precision`"},
+                  {"name": "captured_fraud_exposure_amount", "expression": "`captured_fraud_exposure_amount`"}
+                ],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "priority_tier", "displayName": "Priority"},
+                  {"fieldName": "queue_count", "displayName": "Queue Count"},
+                  {"fieldName": "captured_fraud_count", "displayName": "Captured Fraud"},
+                  {"fieldName": "audit_precision", "displayName": "Audit Precision", "format": {"type": "number-percent"}},
+                  {"fieldName": "captured_fraud_exposure_amount", "displayName": "Captured Exposure Proxy", "format": {"type": "number-currency", "currencyCode": "USD", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 2}}}
+                ]
+              },
+              "frame": {"showTitle": true, "title": "Audit Detail"}
+            }
+          },
+          "position": {"x": 6, "y": 2, "width": 6, "height": 6}
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {"light": "#F4F1EA", "dark": "#172024"},
+      "widgetBackgroundColor": {"light": "#FFFDFC", "dark": "#202B30"},
+      "fontColor": {"light": "#17323B", "dark": "#E8F0F2"},
+      "selectionColor": {"light": "#0072B2", "dark": "#56B4E9"},
+      "visualizationColors": ["#0072B2", "#E69F00", "#009E73", "#CC79A7", "#D55E00", "#56B4E9", "#F0E442"],
+      "widgetHeaderAlignment": "LEFT",
+      "fontFamily": "Space Grotesk",
+      "widgetCornerRadius": 10
+    }
+  }
+}

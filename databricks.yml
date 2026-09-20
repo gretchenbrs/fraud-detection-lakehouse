@@ -1,7 +1,13 @@
 bundle:
   name: fraud-risk-lakehouse
 
+include:
+  - resources/*.yml
+
 variables:
+  warehouse_id:
+    description: SQL warehouse used by the AI/BI dashboard
+    default: "7bd8a109f691d393"
   catalog_name:
     description: Unity Catalog catalog for the fraud lakehouse
     default: "workspace"
@@ -44,4 +50,4 @@ targets:
     default: true
     mode: development
     workspace:
-      host: ${env.DATABRICKS_HOST}
+      host: https://dbc-c80fffcf-363a.cloud.databricks.com

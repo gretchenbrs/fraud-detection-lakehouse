@@ -1,9 +1,11 @@
-# Databricks SQL Dashboard Guide
+# Databricks AI/BI Dashboard Guide
 
 ## Purpose
 
 The dashboard presents final model evidence, risk trends, and an investigation queue from
-the persisted Gold tables. It does not train models or alter pipeline data.
+the persisted Gold tables. It does not train models or alter pipeline data. Its source is
+version controlled in `dashboards/fraud_risk_analytics.lvdash.json` and registered as a
+Databricks Bundle resource in `resources/fraud_risk_dashboard.dashboard.yml`.
 
 ## Source Tables
 
@@ -24,9 +26,36 @@ the persisted Gold tables. It does not train models or alter pipeline data.
 | Investigation queue | 7 | Sortable detail table |
 | Retrospective audit | 8 | Small audit table, clearly labeled as post-outcome analysis |
 
-The numbered SQL statements are in [../sql/dashboard_queries.sql](../sql/dashboard_queries.sql).
-Create one saved Databricks SQL query per numbered section, then add the recommended
-visualization to a single dashboard canvas.
+The numbered SQL statements are in [../sql/dashboard_queries.sql](../sql/dashboard_queries.sql)
+for ad hoc inspection. The deployable dashboard contains equivalent portable SQL using bare
+table names; Bundle parameters supply the catalog and schema.
+
+## Dashboard Pages
+
+1. **Executive Overview**: operating KPIs, monthly risk trends, queue mix, merchant risk,
+   and champion-model evidence.
+2. **Investigation Operations**: a top-100 ranked analyst queue without outcome labels.
+3. **Retrospective Audit**: post-outcome queue precision and captured exposure proxy,
+   intentionally separated from operational prioritization.
+
+## Deployment
+
+The default Bundle configuration uses SQL warehouse `7bd8a109f691d393` and namespace
+`workspace.fraud_detection`. Override the Bundle variables if another environment is used.
+
+```bash
+databricks auth login \
+  --host https://dbc-c80fffcf-363a.cloud.databricks.com \
+  --profile fraud-risk-lakehouse
+
+databricks bundle validate -t dev -p fraud-risk-lakehouse
+databricks bundle deploy -t dev -p fraud-risk-lakehouse
+databricks bundle summary -t dev -p fraud-risk-lakehouse
+```
+
+After deployment, open the dashboard URL from `bundle summary`, verify all datasets refresh,
+and publish it from the dashboard UI. If UI edits are made later, export or generate the
+updated dashboard definition before the next deployment so Git remains the source of truth.
 
 ## Interpretation Guardrails
 
