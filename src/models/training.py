@@ -46,13 +46,17 @@ def add_training_class_weights(training: DataFrame, enabled: bool = True) -> Dat
     )
 
 
-def fit_logistic_regression(training: DataFrame, model_config: dict[str, Any]):
+def fit_logistic_regression(
+    training: DataFrame,
+    model_config: dict[str, Any],
+    hyperparameters: dict[str, Any] | None = None,
+):
     """Fit the regularized baseline model on preprocessed training rows."""
     from pyspark.ml import Pipeline
     from pyspark.ml.classification import LogisticRegression
     from pyspark.ml.feature import StandardScaler
 
-    config = model_config["logistic_regression"]
+    config = hyperparameters or model_config["logistic_regression"]
     scaler = StandardScaler(
         inputCol="raw_features",
         outputCol="scaled_features",
@@ -74,11 +78,15 @@ def fit_logistic_regression(training: DataFrame, model_config: dict[str, Any]):
     return Pipeline(stages=[scaler, classifier]).fit(training)
 
 
-def fit_random_forest(training: DataFrame, model_config: dict[str, Any]):
+def fit_random_forest(
+    training: DataFrame,
+    model_config: dict[str, Any],
+    hyperparameters: dict[str, Any] | None = None,
+):
     """Fit the tree-based comparison model on the same training rows."""
     from pyspark.ml.classification import RandomForestClassifier
 
-    config = model_config["random_forest"]
+    config = hyperparameters or model_config["random_forest"]
     classifier = RandomForestClassifier(
         featuresCol="raw_features",
         labelCol="label",

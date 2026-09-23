@@ -120,8 +120,9 @@ retained only for retrospective audit and never influences queue rank.
 5. [notebooks/03_silver_pipeline.py](notebooks/03_silver_pipeline.py)
 6. [notebooks/04_feature_engineering.py](notebooks/04_feature_engineering.py)
 7. [notebooks/05_model_training.py](notebooks/05_model_training.py)
-8. [notebooks/06_gold_risk_analytics.py](notebooks/06_gold_risk_analytics.py)
-9. [notebooks/07_business_reporting.py](notebooks/07_business_reporting.py)
+8. [notebooks/08_model_tuning.py](notebooks/08_model_tuning.py) - validation-only candidate selection and final champion test evaluation
+9. [notebooks/06_gold_risk_analytics.py](notebooks/06_gold_risk_analytics.py)
+10. [notebooks/07_business_reporting.py](notebooks/07_business_reporting.py)
 
 ## Deploy And Run The Workflow
 

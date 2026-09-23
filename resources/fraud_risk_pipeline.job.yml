@@ -131,9 +131,25 @@ resources:
               write_output: "true"
           environment_key: standard_v6
 
-        - task_key: gold_risk_analytics
+        - task_key: model_tuning
           depends_on:
             - task_key: model_training
+          description: Tune reproducible candidates on validation only, then retain a final test evaluation for the champion.
+          notebook_task:
+            notebook_path: ../notebooks/08_model_tuning.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              config_path: ${workspace.file_path}/config/project_config.yml
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              model_storage_mode: ${var.model_storage_mode}
+              model_write_mode: overwrite
+              write_output: "true"
+          environment_key: standard_v6
+
+        - task_key: gold_risk_analytics
+          depends_on:
+            - task_key: model_tuning
           description: Select the validation champion and materialize risk KPIs plus investigation queue.
           notebook_task:
             notebook_path: ../notebooks/06_gold_risk_analytics.py

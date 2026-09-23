@@ -24,6 +24,7 @@ class WorkflowDefinitionTests(unittest.TestCase):
             "silver_pipeline",
             "feature_engineering",
             "model_training",
+            "model_tuning",
             "gold_risk_analytics",
             "business_reporting",
         ]
@@ -40,6 +41,7 @@ class WorkflowDefinitionTests(unittest.TestCase):
             "silver_pipeline",
             "feature_engineering",
             "model_training",
+            "model_tuning",
             "gold_risk_analytics",
         ]
         for task_key in expected_dependencies:
@@ -47,11 +49,11 @@ class WorkflowDefinitionTests(unittest.TestCase):
 
     def test_tasks_use_serverless_environment_and_deployed_config_path(self) -> None:
         self.assertIn('environment_version: "6"', self.workflow_text)
-        self.assertEqual(self.workflow_text.count("environment_key: standard_v6"), 10)
-        self.assertEqual(self.workflow_text.count("project_root: ${workspace.file_path}"), 9)
+        self.assertEqual(self.workflow_text.count("environment_key: standard_v6"), 11)
+        self.assertEqual(self.workflow_text.count("project_root: ${workspace.file_path}"), 10)
         self.assertEqual(
             self.workflow_text.count("config_path: ${workspace.file_path}/config/project_config.yml"),
-            9,
+            10,
         )
 
     def test_workflow_is_single_concurrent_run_and_queued(self) -> None:

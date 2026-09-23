@@ -63,6 +63,7 @@ models:
     overall_metrics: model_overall_metrics
     threshold_metrics: model_threshold_metrics
     top_k_metrics: model_top_k_metrics
+    tuning_trials: model_tuning_trials
   base_path: dbfs:/tmp/fraud-risk-lakehouse/models
   table_path_overrides: {}
   seed: 42
@@ -96,6 +97,36 @@ models:
     max_depth: 8
     max_bins: 128
     subsampling_rate: 0.7
+  tuning:
+    enabled: true
+    selection_metric: pr_auc
+    candidates:
+      - model_name: logistic_regression_baseline
+        family: logistic_regression
+        parameters:
+          max_iter: 40
+          reg_param: 0.05
+          elastic_net_param: 0.0
+      - model_name: logistic_regression_elastic_net
+        family: logistic_regression
+        parameters:
+          max_iter: 60
+          reg_param: 0.01
+          elastic_net_param: 0.25
+      - model_name: random_forest_baseline
+        family: random_forest
+        parameters:
+          num_trees: 40
+          max_depth: 8
+          max_bins: 128
+          subsampling_rate: 0.7
+      - model_name: random_forest_deeper
+        family: random_forest
+        parameters:
+          num_trees: 80
+          max_depth: 12
+          max_bins: 128
+          subsampling_rate: 0.8
 
 gold:
   storage_mode: unity_catalog
@@ -131,5 +162,5 @@ runtime:
     - Bronze and Silver use overwrite for reproducible portfolio runs; production pipelines should use incremental writes.
     - Feature splits are chronological and MCC fraud rates are fitted from training rows only.
     - Model preprocessing and class weights are fitted on training rows only.
-    - Thresholds are compared on validation data; the test split is reserved for final evaluation.
+    - Thresholds and tuning candidates are compared on validation data; the test split is reserved for final evaluation.
     - Gold champion selection uses validation PR-AUC; test labels never select a model or threshold.

@@ -177,8 +177,9 @@ The Bronze layer reads these files as whole-text JSON payloads and explodes them
 5. `03_silver_pipeline.py`
 6. `04_feature_engineering.py`
 7. `05_model_training.py`
-8. `06_gold_risk_analytics.py`
-9. `07_business_reporting.py`
+8. `08_model_tuning.py` - ranks configured candidates using validation PR-AUC only, then evaluates only the champion on test
+9. `06_gold_risk_analytics.py`
+10. `07_business_reporting.py`
 
 ## Data Leakage Guardrails
 

@@ -18,6 +18,7 @@ MODEL_DATASET_NAMES = (
     "threshold_metrics",
     "top_k_metrics",
 )
+TUNING_DATASET_NAME = "tuning_trials"
 GOLD_DATASET_NAMES = ("model_scorecard", "daily_risk_kpis", "investigation_queue")
 
 
@@ -225,6 +226,59 @@ def validate_project_config(config: dict[str, Any]) -> None:
     subsampling_rate = forest_cfg.get("subsampling_rate")
     if not isinstance(subsampling_rate, (int, float)) or not 0 < subsampling_rate <= 1:
         raise ValueError("models.random_forest.subsampling_rate must be in (0, 1].")
+
+    tuning_cfg = models_cfg.get("tuning")
+    if tuning_cfg is not None:
+        if not isinstance(tuning_cfg.get("enabled"), bool):
+            raise ValueError("models.tuning.enabled must be true or false.")
+        if tuning_cfg.get("selection_metric") not in {"pr_auc", "roc_auc"}:
+            raise ValueError("models.tuning.selection_metric must be pr_auc or roc_auc.")
+        candidates = tuning_cfg.get("candidates")
+        if not isinstance(candidates, list) or len(candidates) < 2:
+            raise ValueError("models.tuning.candidates must contain at least two candidates.")
+        candidate_names: list[str] = []
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                raise ValueError("Each models.tuning candidate must be a mapping.")
+            candidate_name = candidate.get("model_name")
+            validate_identifier(
+                candidate_name,
+                label="models.tuning.candidates.model_name",
+                allow_placeholder=False,
+            )
+            candidate_names.append(candidate_name)
+            family = candidate.get("family")
+            parameters = candidate.get("parameters")
+            if family not in {"logistic_regression", "random_forest"}:
+                raise ValueError("Tuning candidate family must be logistic_regression or random_forest.")
+            if not isinstance(parameters, dict):
+                raise ValueError("Tuning candidate parameters must be a mapping.")
+            if family == "logistic_regression":
+                if not isinstance(parameters.get("max_iter"), int) or parameters["max_iter"] <= 0:
+                    raise ValueError("Tuned logistic_regression max_iter must be a positive integer.")
+                if not isinstance(parameters.get("reg_param"), (int, float)) or parameters["reg_param"] < 0:
+                    raise ValueError("Tuned logistic_regression reg_param must be non-negative.")
+                elastic_net = parameters.get("elastic_net_param")
+                if not isinstance(elastic_net, (int, float)) or not 0 <= elastic_net <= 1:
+                    raise ValueError("Tuned logistic_regression elastic_net_param must be in [0, 1].")
+            else:
+                for key in ("num_trees", "max_depth", "max_bins"):
+                    if not isinstance(parameters.get(key), int) or parameters[key] <= 0:
+                        raise ValueError(f"Tuned random_forest {key} must be a positive integer.")
+                candidate_subsampling = parameters.get("subsampling_rate")
+                if not isinstance(candidate_subsampling, (int, float)) or not 0 < candidate_subsampling <= 1:
+                    raise ValueError("Tuned random_forest subsampling_rate must be in (0, 1].")
+        if len(candidate_names) != len(set(candidate_names)):
+            raise ValueError("models.tuning candidate model_name values must be unique.")
+        if tuning_cfg["enabled"]:
+            tuning_table = models_cfg.get("table_names", {}).get(TUNING_DATASET_NAME)
+            if not tuning_table:
+                raise ValueError("models.table_names.tuning_trials is required when tuning is enabled.")
+            validate_identifier(
+                tuning_table,
+                label="models.table_names.tuning_trials",
+                allow_placeholder=False,
+            )
 
     gold_cfg = config["gold"]
     gold_storage_mode = gold_cfg.get("storage_mode")
@@ -483,7 +537,7 @@ def feature_dataset_runtime(config: dict[str, Any], dataset_name: str) -> dict[s
 
 def model_table_name(config: dict[str, Any], dataset_name: str) -> str:
     """Return the fully-qualified Unity Catalog model-output table name."""
-    if dataset_name not in MODEL_DATASET_NAMES:
+    if dataset_name not in (*MODEL_DATASET_NAMES, TUNING_DATASET_NAME):
         raise ValueError(f"Unsupported model dataset: {dataset_name}")
     catalog_name = config["databricks"]["catalog_name"]
     schema_name = config["databricks"]["schema_name"]
@@ -495,7 +549,7 @@ def model_table_name(config: dict[str, Any], dataset_name: str) -> str:
 
 def model_target_path(config: dict[str, Any], dataset_name: str) -> str:
     """Return the configured Delta path for a model output."""
-    if dataset_name not in MODEL_DATASET_NAMES:
+    if dataset_name not in (*MODEL_DATASET_NAMES, TUNING_DATASET_NAME):
         raise ValueError(f"Unsupported model dataset: {dataset_name}")
     overrides = config["models"].get("table_path_overrides", {})
     if dataset_name in overrides and overrides[dataset_name]:
