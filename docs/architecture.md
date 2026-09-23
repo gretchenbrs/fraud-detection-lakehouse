@@ -18,8 +18,13 @@ The current implementation includes:
 - threshold and top-k evaluation outputs
 - validation-selected champion model and Gold business outputs
 - dashboard-ready business summaries and investigation views
+- a Bundle-managed AI/BI dashboard
+- a Bundle-managed, manually triggered end-to-end Lakeflow Job
 
-Dashboards, scheduled workflows, and deployment remain intentionally out of scope for this phase.
+The workflow is deliberately deployed without an automatic schedule. The raw source files are
+static portfolio inputs, so a daily retraining schedule would add cost without delivering new
+information. When a source refresh cadence is defined, a schedule can be enabled in the Job UI
+without changing the pipeline logic.
 
 ## Source System Boundary
 

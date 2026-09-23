@@ -26,8 +26,10 @@ This phase includes:
 - a three-page Databricks AI/BI dashboard managed as a Bundle resource
 - managed Delta outputs in Unity Catalog
 
-This phase does **not** yet implement a scheduled end-to-end workflow. Dashboard deployment
-is declarative through the Databricks Bundle and requires an authenticated CLI session.
+This phase includes a deployable, manually triggered end-to-end Workflow. It is managed by
+the Databricks Bundle, has one concurrent run, and deliberately has no automatic schedule so
+the static portfolio data does not retrain unnecessarily. Dashboard deployment is also
+declarative through the Bundle and requires an authenticated CLI session.
 
 ## Verified Raw Inputs
 
@@ -120,6 +122,26 @@ retained only for retrospective audit and never influences queue rank.
 7. [notebooks/05_model_training.py](notebooks/05_model_training.py)
 8. [notebooks/06_gold_risk_analytics.py](notebooks/06_gold_risk_analytics.py)
 9. [notebooks/07_business_reporting.py](notebooks/07_business_reporting.py)
+
+## Deploy And Run The Workflow
+
+Validate and deploy all Bundle-managed resources, including the AI/BI dashboard and the
+end-to-end Lakeflow Job:
+
+```bash
+databricks bundle validate -t dev
+databricks bundle deploy -t dev
+```
+
+Run the complete pipeline on demand after deployment:
+
+```bash
+databricks bundle run fraud_risk_lakehouse_pipeline -t dev
+```
+
+The job uses Serverless environment version 6, runs tasks in notebook order, and writes
+reproducible `overwrite` outputs. Configure a schedule in the Databricks Job UI only when
+the source-data refresh cadence is defined.
 
 ## Repository Layout
 
