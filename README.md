@@ -120,9 +120,16 @@ retained only for retrospective audit and never influences queue rank.
 5. [notebooks/03_silver_pipeline.py](notebooks/03_silver_pipeline.py)
 6. [notebooks/04_feature_engineering.py](notebooks/04_feature_engineering.py)
 7. [notebooks/05_model_training.py](notebooks/05_model_training.py)
-8. [notebooks/08_model_tuning.py](notebooks/08_model_tuning.py) - validation-only candidate selection and final champion test evaluation
-9. [notebooks/06_gold_risk_analytics.py](notebooks/06_gold_risk_analytics.py)
-10. [notebooks/07_business_reporting.py](notebooks/07_business_reporting.py)
+8. [notebooks/06_gold_risk_analytics.py](notebooks/06_gold_risk_analytics.py)
+9. [notebooks/07_business_reporting.py](notebooks/07_business_reporting.py)
+
+Run [08_model_tuning](notebooks/08_model_tuning.py) separately when reviewing
+new candidates. It writes isolated `experiment_model_*` tables. The completed
+[selection report](docs/model-selection-20260927.md) retains the original logistic
+regression; the expanded search did not improve validation PR-AUC.
+
+[09_saved_model](notebooks/09_saved_model.py) persists the reviewed model and
+preprocessing, then loads them for historical replay without training.
 
 ## Deploy And Run The Workflow
 
@@ -143,6 +150,26 @@ databricks bundle run fraud_risk_lakehouse_pipeline -t dev
 The job uses Serverless environment version 6, runs tasks in notebook order, and writes
 reproducible `overwrite` outputs. Configure a schedule in the Databricks Job UI only when
 the source-data refresh cadence is defined.
+
+Separate operations are available after deployment:
+
+See the [operations guide](docs/operations.md) for direct Job links and safe reruns.
+
+| Bundle job key | Purpose |
+| --- | --- |
+| `fraud_risk_lakehouse_pipeline` | Full historical rebuild and baseline retraining; no tuning |
+| `fraud_model_tuning` | Optional candidate search in experiment tables |
+| `fraud_model_release` | Save the reviewed fixed model once, then verify loading and scoring |
+| `fraud_model_scoring` | Replay the frozen historical test input without training |
+| `fraud_reporting_refresh` | Refresh Gold and reports from existing evaluation tables |
+
+Use `databricks bundle run JOB_KEY -t dev` for any operation. Each job automatically
+orders its tasks. No recurring schedule is configured because inputs are static.
+Model artifacts and frozen replay features reside in a dedicated `model_artifacts`
+Unity Catalog volume. Replay scores go to `model_batch_scores`; original
+evaluation and Gold tables remain the tuning-run audit record. This is historical
+replay, not an incremental production feed. Never overlap full rebuild with report
+refresh, since the existing evaluation tables are shared.
 
 ## Repository Layout
 

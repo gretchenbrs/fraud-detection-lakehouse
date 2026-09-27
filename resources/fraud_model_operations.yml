@@ -1,0 +1,118 @@
+# Independent operational jobs; no schedules for static portfolio data.
+resources:
+  jobs:
+    fraud_model_tuning:
+      name: "Fraud Model Tuning - On Demand"
+      description: "Compare candidates in isolated experiment tables; review validation results before promotion."
+      max_concurrent_runs: 1
+      queue:
+        enabled: true
+      timeout_seconds: 14400
+      environments:
+        - environment_key: standard_v6
+          spec:
+            environment_version: "6"
+      tasks:
+        - task_key: model_tuning
+          notebook_task:
+            notebook_path: ../notebooks/08_model_tuning.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              config_path: ${workspace.file_path}/config/project_config.yml
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              model_storage_mode: unity_catalog
+              model_write_mode: overwrite
+              write_output: "true"
+          environment_key: standard_v6
+    fraud_reporting_refresh:
+      name: "Fraud Reporting Refresh"
+      description: "Refresh retrospective Gold and reporting from existing evaluation tables; no model training."
+      max_concurrent_runs: 1
+      queue:
+        enabled: true
+      timeout_seconds: 14400
+      environments:
+        - environment_key: standard_v6
+          spec:
+            environment_version: "6"
+      tasks:
+        - task_key: gold_risk_analytics
+          notebook_task:
+            notebook_path: ../notebooks/06_gold_risk_analytics.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              config_path: ${workspace.file_path}/config/project_config.yml
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              gold_storage_mode: unity_catalog
+              gold_write_mode: overwrite
+              write_output: "true"
+          environment_key: standard_v6
+        - task_key: business_reporting
+          depends_on:
+            - task_key: gold_risk_analytics
+          notebook_task:
+            notebook_path: ../notebooks/07_business_reporting.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              config_path: ${workspace.file_path}/config/project_config.yml
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          environment_key: standard_v6
+    fraud_model_release:
+      name: "Fraud Saved Model - Fit and Verify"
+      description: "Persist reviewed fixed parameters once and verify loading in a fresh scoring task."
+      max_concurrent_runs: 1
+      queue:
+        enabled: true
+      timeout_seconds: 14400
+      environments:
+        - environment_key: standard_v6
+          spec:
+            environment_version: "6"
+      tasks:
+        - task_key: save_reviewed_model
+          notebook_task:
+            notebook_path: ../notebooks/09_saved_model.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              config_path: ${workspace.file_path}/config/project_config.yml
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              mode: fit
+          environment_key: standard_v6
+        - task_key: verify_saved_model
+          depends_on:
+            - task_key: save_reviewed_model
+          notebook_task:
+            notebook_path: ../notebooks/09_saved_model.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              config_path: ${workspace.file_path}/config/project_config.yml
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              mode: score
+          environment_key: standard_v6
+    fraud_model_scoring:
+      name: "Fraud Saved Model - Historical Replay"
+      description: "Load the frozen model and historical input; score without any training."
+      max_concurrent_runs: 1
+      queue:
+        enabled: true
+      timeout_seconds: 14400
+      environments:
+        - environment_key: standard_v6
+          spec:
+            environment_version: "6"
+      tasks:
+        - task_key: score_saved_model
+          notebook_task:
+            notebook_path: ../notebooks/09_saved_model.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              config_path: ${workspace.file_path}/config/project_config.yml
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              mode: score
+          environment_key: standard_v6

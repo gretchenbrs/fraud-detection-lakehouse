@@ -177,9 +177,14 @@ The Bronze layer reads these files as whole-text JSON payloads and explodes them
 5. `03_silver_pipeline.py`
 6. `04_feature_engineering.py`
 7. `05_model_training.py`
-8. `08_model_tuning.py` - ranks configured candidates using validation PR-AUC only, then evaluates only the champion on test
-9. `06_gold_risk_analytics.py`
-10. `07_business_reporting.py`
+8. `06_gold_risk_analytics.py`
+9. `07_business_reporting.py`
+
+The optional `08_model_tuning.py` runs in an independent job and writes experiment
+tables. Reporting refresh runs 06 and 07 without training. The reviewed model is
+persisted by `09_saved_model.py` with fitted preprocessing and frozen historical
+replay input. Its scoring mode loads that artifact without fitting any stages.
+See [model selection and operational limits](model-selection-20260927.md).
 
 ## Data Leakage Guardrails
 

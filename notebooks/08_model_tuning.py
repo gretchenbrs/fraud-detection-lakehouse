@@ -64,6 +64,11 @@ from src.utils.config import TUNING_DATASET_NAME
 # COMMAND ----------
 
 project_config = resolve_runtime_project_config(config_path, overrides=runtime_overrides)
+# Candidate experiments must not replace the reviewed model's reporting outputs.
+for dataset_name, table_name in project_config["models"]["table_names"].items():
+    project_config["models"]["table_names"][dataset_name] = f"experiment_{table_name}"
+project_config["models"]["base_path"] += "/experiments"
+project_config["models"]["table_path_overrides"] = {}
 print("Resolved tuning configuration:")
 print(project_config["models"]["tuning"])
 
