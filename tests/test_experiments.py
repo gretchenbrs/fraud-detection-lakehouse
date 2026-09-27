@@ -33,4 +33,3 @@ class ExperimentTests(unittest.TestCase):
     def test_candidate_names_are_unique(self):
         names = [name for name, _, _ in CANDIDATES]
         self.assertEqual(len(names), len(set(names)))
-

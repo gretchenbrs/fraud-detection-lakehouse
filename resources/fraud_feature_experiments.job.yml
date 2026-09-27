@@ -58,4 +58,3 @@ resources:
               schema_name: ${var.schema_name}
               mode: "summarize"
           environment_key: standard_v6
-

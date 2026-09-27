@@ -153,4 +153,3 @@ def run_spark_guardrail_checks(spark):
     assert reference["b"] == 0.001, "Same-day labels must not affect own features."
     assert reference["d"] == 0.5, "Only matured training labels may set the frozen prior."
     return {"history_and_encoding_checks": "passed"}
-
