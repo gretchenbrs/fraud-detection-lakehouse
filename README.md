@@ -153,6 +153,11 @@ the source-data refresh cadence is defined.
 
 Separate operations are available after deployment:
 
+The optional [V2 feature experiment](docs/v2-experiments.md) compares past-only
+behavior, delayed MCC encoding, snapshot removal and class weighting on rolling
+2017/2018 validation. Run `fraud_feature_experiments` separately; it excludes the
+2019 test period and writes only `experiment_v2_*` tables.
+
 See the [operations guide](docs/operations.md) for direct Job links and safe reruns.
 
 | Bundle job key | Purpose |

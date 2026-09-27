@@ -72,6 +72,7 @@ def overall_auc_row(
     predictions: DataFrame,
     model_name: str,
     evaluation_split: str,
+    num_bins: int = 1000,
 ) -> dict[str, Any]:
     """Calculate PR-AUC, ROC-AUC, row count, and natural prevalence."""
     from pyspark.ml.evaluation import BinaryClassificationEvaluator
@@ -89,6 +90,7 @@ def overall_auc_row(
     evaluator = BinaryClassificationEvaluator(
         labelCol="label",
         rawPredictionCol="score",
+        numBins=num_bins,
     )
     pr_auc = evaluator.setMetricName("areaUnderPR").evaluate(evaluation_frame)
     roc_auc = evaluator.setMetricName("areaUnderROC").evaluate(evaluation_frame)
