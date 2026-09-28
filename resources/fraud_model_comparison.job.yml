@@ -1,0 +1,101 @@
+resources:
+  jobs:
+    fraud_model_comparison:
+      name: "Fraud Model Families and Frozen Historical Test"
+      max_concurrent_runs: 1
+      timeout_seconds: 14400
+      environments:
+        - environment_key: standard_v6
+          spec:
+            environment_version: "6"
+      tasks:
+        - task_key: "2017_logistic_regression"
+          environment_key: standard_v6
+          notebook_task:
+            notebook_path: ../notebooks/11_model_comparison.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              mode: validate
+              fold: "2017"
+              family: logistic_regression
+              run_tag: "{{job.run_id}}"
+        - task_key: "2017_random_forest"
+          depends_on:
+            - task_key: "2017_logistic_regression"
+          environment_key: standard_v6
+          notebook_task:
+            notebook_path: ../notebooks/11_model_comparison.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              mode: validate
+              fold: "2017"
+              family: random_forest
+              run_tag: "{{job.run_id}}"
+        - task_key: "2017_gradient_boosted_trees"
+          depends_on:
+            - task_key: "2017_random_forest"
+          environment_key: standard_v6
+          notebook_task:
+            notebook_path: ../notebooks/11_model_comparison.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              mode: validate
+              fold: "2017"
+              family: gradient_boosted_trees
+              run_tag: "{{job.run_id}}"
+        - task_key: "2018_logistic_regression"
+          depends_on:
+            - task_key: "2017_gradient_boosted_trees"
+          environment_key: standard_v6
+          notebook_task:
+            notebook_path: ../notebooks/11_model_comparison.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              mode: validate
+              fold: "2018"
+              family: logistic_regression
+              run_tag: "{{job.run_id}}"
+        - task_key: "2018_random_forest"
+          depends_on:
+            - task_key: "2018_logistic_regression"
+          environment_key: standard_v6
+          notebook_task:
+            notebook_path: ../notebooks/11_model_comparison.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              mode: validate
+              fold: "2018"
+              family: random_forest
+              run_tag: "{{job.run_id}}"
+        - task_key: "2018_gradient_boosted_trees"
+          depends_on:
+            - task_key: "2018_random_forest"
+          environment_key: standard_v6
+          notebook_task:
+            notebook_path: ../notebooks/11_model_comparison.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              mode: validate
+              fold: "2018"
+              family: gradient_boosted_trees
+              run_tag: "{{job.run_id}}"
+        - task_key: freeze
+          depends_on:
+            - task_key: "2018_gradient_boosted_trees"
+          environment_key: standard_v6
+          notebook_task:
+            notebook_path: ../notebooks/11_model_comparison.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              mode: freeze
+              run_tag: "{{job.run_id}}"
+        - task_key: test
+          depends_on:
+            - task_key: "freeze"
+          environment_key: standard_v6
+          notebook_task:
+            notebook_path: ../notebooks/11_model_comparison.py
+            base_parameters:
+              project_root: ${workspace.file_path}
+              mode: test
+              run_tag: "{{job.run_id}}"
